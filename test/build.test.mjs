@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 
+import { createDevLoaderScript } from '../scripts/dev-server.mjs';
+
 const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const DIST_PATH = path.join(ROOT_DIR, 'dist/google-ai-search-shortcuts.user.js');
 const META_PATH = path.join(ROOT_DIR, 'dist/google-ai-search-shortcuts.meta.js');
@@ -62,5 +64,16 @@ describe('built userscript artifact', () => {
     assert.ok(headerMatch, 'userscript must contain metadata header block');
     assert.equal(metaSource, `${headerMatch[0]}\n`);
     assert.doesNotMatch(metaSource, /\(function\s*\(\)/);
+  });
+
+  it('generates a valid live-reload Tampermonkey dev loader using GM_xmlhttpRequest', () => {
+    const loader = createDevLoaderScript({ port: 4174 });
+    assert.match(loader, /\/\/ @name\s+Google AI Search Keyboard Shortcuts \(Local Dev\)$/m);
+    assert.match(loader, /\/\/ @namespace\s+https:\/\/github\.com\/hron\/google-ai-search-tampermonkey#dev$/m);
+    assert.match(loader, /\/\/ @grant\s+GM_addStyle$/m);
+    assert.match(loader, /\/\/ @grant\s+GM_xmlhttpRequest$/m);
+    assert.match(loader, /\/\/ @connect\s+127\.0\.0\.1$/m);
+    assert.doesNotMatch(loader, /\/\/ @require\s/m, 'must not use cached @require');
+    assert.doesNotThrow(() => new vm.Script(loader, { filename: 'dev-loader.user.js' }));
   });
 });

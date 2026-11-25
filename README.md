@@ -23,6 +23,9 @@ Scroll the AI Mode conversation smoothly without leaving the `"Ask anything"` pr
 - Rapid taps accumulate smoothly without losing distance, and holding **`PageUp`** / **`PageDown`** transitions into continuous smooth scrolling that coasts to a stop on release.
 - Modifier combos like **`Shift+PageUp`** / **`Shift+PageDown`** (text selection) and **`Ctrl+PageUp`** / **`Ctrl+PageDown`** (tab switching), as well as dialogs, menus, sidebar scrolling, and other editable fields, are left untouched.
 
+### Vimium-friendly citation chips & full-height links popover
+Inline source chips (e.g. `Google Antigravity +3`) are an empty overlay link stacked above the real "related results" button. Vimium hints the overlay and its synthetic click used to open the first source in a new tab immediately. The script redirects only synthetic (non-trusted) clicks on the overlay to the button, so Vimium opens the list of sources while real mouse clicks remain untouched. It also expands the "Related links" popover to full height (up to the viewport height, clamping its vertical position inside the viewport) so all sources are visible without awkward keyboard scrolling.
+
 ## Development
 
 Requirements: Node.js (zero external npm dependencies).
@@ -84,6 +87,7 @@ git push origin main --follow-tags
 - `src/lib/scrolling.js` — Pure spring-based smooth scrolling calculations.
 - `src/features/page-scroll.js` — Smooth `PageUp` / `PageDown` scrolling while the prompt input is focused.
 - `src/features/search-threads.js` — Keyboard-first `Ctrl+K` thread search & sidebar navigation.
+- `src/features/citation-chips.js` — Redirects synthetic (Vimium) clicks on citation chip overlay links to the chip button.
 - `src/main.js` — Feature bootstrapper.
 - `scripts/build.mjs` — Zero-dependency bundler generating `dist/google-ai-search-shortcuts.user.js` and `dist/google-ai-search-shortcuts.meta.js`.
 - `test/` — Unit tests (`node --test`).

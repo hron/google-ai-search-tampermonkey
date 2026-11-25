@@ -15,6 +15,7 @@ const SOURCE_FILES = [
   'src/lib/dom.js',
   'src/features/page-scroll.js',
   'src/features/search-threads.js',
+  'src/features/citation-chips.js',
   'src/main.js',
 ];
 

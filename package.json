@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Tampermonkey userscript adding missing keyboard shortcuts to Google Search AI Mode (google.com/search)",
   "author": "Aleksei Gusev",
+  "license": "MIT",
   "homepage": "https://github.com/hron/google-ai-search-tampermonkey#readme",
   "repository": {
     "type": "git",

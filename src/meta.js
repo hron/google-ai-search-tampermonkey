@@ -12,6 +12,7 @@ export function createUserscriptHeader({ version }) {
 // @version      ${version}
 // @description  Adds missing keyboard shortcuts to Google Search AI Mode (google.com/search), including smooth PageUp/PageDown scrolling while the prompt input is focused and a keyboard-first Ctrl+K thread search.
 // @author       Aleksei Gusev
+// @license      MIT
 // @homepageURL  ${REPO_URL}
 // @supportURL   ${REPO_URL}/issues
 // @downloadURL  ${RELEASE_DOWNLOAD_BASE}/google-ai-search-shortcuts.user.js

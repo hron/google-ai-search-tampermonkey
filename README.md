@@ -96,3 +96,7 @@ git push origin main --follow-tags
 - `src/main.js` — Feature bootstrapper.
 - `scripts/build.mjs` — Zero-dependency bundler generating `dist/google-ai-search-shortcuts.user.js` and `dist/google-ai-search-shortcuts.meta.js`.
 - `test/` — Unit tests (`node --test`).
+
+## License
+
+[MIT](LICENSE)

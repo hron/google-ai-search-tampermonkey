@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en" style="--sxs-input-plate-height: 108px;">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Google AI Search Shortcuts Verification Harness</title>
+  <style>
+    :root {
+      --page-bg: #1f1f1f;
+      --lhs-rail-background: #272930;
+      --lhs-container-background: #363840;
+      --lhs-primary-font: #e8eaf2;
+      --lhs-secondary-font: #a7a9b2;
+      --lhs-hover-background-color: color-mix(in srgb, #f0f2f5 6%, #272930);
+      --lhs-selected-background-color: color-mix(in srgb, #f0f2f5 12%, #272930);
+      --bbQxAb: #e8eaf2;
+      --IXoxUe: #a7a9b2;
+      --aYn2S: #363840;
+      --outline: #444746;
+    }
+
+    body.light-theme {
+      --page-bg: #ffffff;
+      --lhs-rail-background: #f0f4f9;
+      --lhs-container-background: #e1e6ed;
+      --lhs-primary-font: #1f1f1f;
+      --lhs-secondary-font: #5f6368;
+      --lhs-hover-background-color: color-mix(in srgb, #1f1f1f 6%, #f0f4f9);
+      --lhs-selected-background-color: color-mix(in srgb, #1f1f1f 12%, #f0f4f9);
+      --bbQxAb: #1a73e8;
+      --IXoxUe: #5f6368;
+      --aYn2S: #e1e6ed;
+      --outline: #dadce0;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--lhs-primary-font);
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+    }
+
+    .hud {
+      position: fixed;
+      top: 8px;
+      right: 12px;
+      z-index: 3000;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(32, 33, 36, 0.92);
+      color: #e8eaed;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      border: 1px solid #5f6368;
+    }
+    .hud button {
+      background: #3c4043;
+      color: #fff;
+      border: 1px solid #5f6368;
+      border-radius: 6px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* Collapsed left rail */
+    .collapsed-rail {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 56px;
+      background: var(--lhs-rail-background);
+      border-right: 1px solid var(--outline);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 16px;
+      gap: 12px;
+      z-index: 1500;
+    }
+    .ONx74b, .UTNPFf {
+      width: 36px;
+      height: 36px;
+      border-radius: 9999px;
+      border: 1px solid var(--outline);
+      background: transparent;
+      color: var(--lhs-primary-font);
+      cursor: pointer;
+    }
+
+    /* Expanded AI Mode history sidebar */
+    .ho072b.j2vKLc {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 261px;
+      background: var(--lhs-rail-background);
+      border-right: 1px solid var(--outline);
+      display: flex;
+      flex-direction: column;
+      z-index: 2000;
+    }
+    .sidebar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+    }
+    .OxKcRe {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      border: 1px solid var(--outline);
+      background: transparent;
+      color: var(--lhs-primary-font);
+      cursor: pointer;
+    }
+    .FBq0Sd {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 12px 12px;
+    }
+    .L9tyXb {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 9999px;
+      background: transparent;
+      color: var(--lhs-primary-font);
+      cursor: pointer;
+      font-size: 14px;
+      text-align: left;
+    }
+    .L9tyXb:hover {
+      background: var(--lhs-hover-background-color);
+    }
+
+    .uTGOrc {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 12px 12px;
+      padding: 4px 8px;
+      border-radius: 9999px;
+      background: var(--lhs-container-background);
+    }
+    .Amkkpc {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      border: none;
+      background: transparent;
+      color: var(--lhs-primary-font);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .LudIE {
+      flex: 1;
+      min-width: 0;
+      height: 30px;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--lhs-primary-font);
+      font-size: 14px;
+    }
+
+    .XOpo9c {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden auto;
+    }
+    .cIl10d {
+      flex: 1;
+      height: 0;
+      min-block-size: 120px;
+      overflow: hidden auto;
+      padding: 0 8px 12px;
+    }
+    .nNFeYb {
+      padding: 8px 10px 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--lhs-secondary-font);
+    }
+    .u987h {
+      display: flex;
+      align-items: center;
+      height: 52px;
+      border-radius: 12px;
+      padding: 0 6px;
+      margin-bottom: 2px;
+    }
+    .u987h:hover {
+      background: var(--lhs-hover-background-color);
+    }
+    .u987h.cp7uzb {
+      background: var(--lhs-selected-background-color);
+    }
+    .qqMZif {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: var(--lhs-primary-font);
+      text-align: left;
+      cursor: pointer;
+      padding: 4px 6px;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fMed7 {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 9999px;
+      background: transparent;
+      color: var(--lhs-secondary-font);
+      cursor: pointer;
+    }
+
+    /* Main conversation view (document.scrollingElement scrolls, mirroring live AI Mode) */
+    [role="main"].WzWwpc.YNk70c {
+      margin-left: 56px;
+      padding: 64px 24px 160px;
+      min-height: 100vh;
+    }
+    body.K9MSg [role="main"].WzWwpc.YNk70c {
+      margin-left: 261px;
+    }
+
+    .qJYHHd.VET7dc.mp0vvc {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .user-turn {
+      display: flex;
+      justify-content: flex-end;
+      margin: 24px 0 16px;
+    }
+    .user-bubble {
+      padding: 10px 16px;
+      border-radius: 18px;
+      background: var(--lhs-container-background);
+      font-size: 15px;
+    }
+    .ai-turn p {
+      line-height: 1.65;
+      margin: 0 0 14px;
+      font-size: 15px;
+    }
+
+    /* Fixed bottom input plate */
+    .y4VEUd.YNk70c {
+      position: fixed;
+      bottom: 0;
+      left: 56px;
+      right: 0;
+      padding: 12px 24px 20px;
+      background: linear-gradient(transparent, var(--page-bg) 30%);
+      z-index: 10;
+    }
+    body.K9MSg .y4VEUd.YNk70c {
+      left: 261px;
+    }
+    .UAbVe.Uu3Gac {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 12px 16px;
+      border-radius: 24px;
+      border: 1px solid var(--outline);
+      background: var(--lhs-container-background);
+    }
+    .Txyg0d {
+      overflow: hidden auto;
+      max-height: 140px;
+    }
+    textarea.ITIRGe {
+      width: 100%;
+      min-height: 44px;
+      resize: none;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--lhs-primary-font);
+      font-size: 15px;
+      line-height: 1.45;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body id="gsr" class="srp P4Yedd">
+  <div class="hud" id="hud">
+    <span>active: <strong id="hud-active">none</strong></span>
+    <span>scrollTop: <strong id="hud-scroll">0</strong>/<span id="hud-max">0</span></span>
+    <span>lastKey: <strong id="hud-key">none</strong></span>
+    <button type="button" id="toggle-theme" tabindex="-1">Toggle Theme</button>
+  </div>
+
+  <div class="collapsed-rail" id="collapsed-rail">
+    <button
+      type="button"
+      jsname="JIu0P"
+      class="ONx74b"
+      aria-label="Open sidebar"
+      jsaction="click:&amp;KJJZid_b|Mrjwi"
+      title="Open sidebar"
+    >☰</button>
+    <button
+      type="button"
+      jsname="gGP3ve"
+      class="UTNPFf"
+      aria-label="New thread"
+      title="New thread"
+    >✎</button>
+  </div>
+
+  <div role="main" class="WzWwpc YNk70c">
+    <div class="qJYHHd VET7dc mp0vvc" data-xid="aim-mars-turn-root" id="turn-root">
+      <div class="user-turn">
+        <div class="user-bubble">Explain orbital mechanics and deep space trajectories</div>
+      </div>
+      <div class="ai-turn" id="ai-response"></div>
+    </div>
+
+    <div class="y4VEUd YNk70c">
+      <div class="t0ITR hh3ttd">
+        <div class="UAbVe Uu3Gac" data-xid="aim-mars-input-plate">
+          <div class="AgWCw">
+            <div class="esoFne" role="presentation">
+              <div class="yaj8zd" role="presentation">
+                <div class="Txyg0d">
+                  <textarea
+                    class="ITIRGe"
+                    autocapitalize="sentences"
+                    autocomplete="off"
+                    aria-autocomplete="none"
+                    maxlength="8192"
+                    aria-label="Ask anything"
+                    placeholder="Ask anything"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Populate long response so document.scrollingElement overflows reliably
+    const aiResponse = document.getElementById('ai-response');
+    for (let i = 1; i <= 48; i += 1) {
+      const p = document.createElement('p');
+      p.textContent = `Paragraph ${i}: Orbital mechanics governs spacecraft trajectories under gravity, from Hohmann transfers and gravity assists to Lagrange point halo orbits across deep space.`;
+      aiResponse.appendChild(p);
+    }
+
+    // Tampermonkey-compatible GM_addStyle shim
+    window.GM_addStyle = function (css) {
+      const style = document.createElement('style');
+      style.setAttribute('data-gm-added', 'true');
+      style.textContent = css;
+      document.head.appendChild(style);
+      return style;
+    };
+
+    // Start scrolled near the bottom, mirroring an active AI Mode conversation
+    const rootScroller = document.scrollingElement || document.documentElement;
+    rootScroller.scrollTop = rootScroller.scrollHeight;
+
+    const hudActive = document.getElementById('hud-active');
+    const hudScroll = document.getElementById('hud-scroll');
+    const hudMax = document.getElementById('hud-max');
+    const hudKey = document.getElementById('hud-key');
+
+    function updateHud() {
+      const ae = document.activeElement;
+      hudActive.textContent = ae ? (ae.getAttribute('aria-label') || ae.className || ae.tagName.toLowerCase()) : 'none';
+      hudScroll.textContent = String(Math.round(rootScroller.scrollTop));
+      hudMax.textContent = String(Math.round(rootScroller.scrollHeight - rootScroller.clientHeight));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      hudKey.textContent = `${e.ctrlKey ? 'Ctrl+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.key}`;
+      setTimeout(updateHud, 20);
+    }, true);
+    window.addEventListener('scroll', updateHud);
+    setInterval(updateHud, 150);
+
+    document.getElementById('toggle-theme').addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+    });
+
+    // Mock Google AI Mode sidebar & Search threads (mirrors live DOM)
+    const MOCK_THREADS = [
+      { id: 'thread-1', title: 'Orbital mechanics overview', snippet: 'Kepler laws and transfer orbits' },
+      { id: 'thread-2', title: 'Rust async runtime comparison', snippet: 'Tokio vs smol benchmarks' },
+      { id: 'thread-3', title: 'Orbital transfer Hohmann math', snippet: 'Delta-v derivation for circular orbits' },
+      { id: 'thread-4', title: 'Firefox WebExtension CSP notes', snippet: 'cloneInto and XrayWrappers' },
+      { id: 'thread-5', title: 'Orbital resonance in Jupiter moons', snippet: 'Io, Europa, and Ganymede 4:2:1' },
+      { id: 'thread-6', title: 'TypeScript generic inference tips', snippet: 'Conditional types and infer' },
+      { id: 'thread-7', title: 'Linux systemd user timers', snippet: 'Persistent timers and journals' },
+      { id: 'thread-8', title: 'PostgreSQL index scan tuning', snippet: 'B-tree vs GIN explain plans' },
+      { id: 'thread-9', title: 'Sourdough hydration ratios', snippet: 'Open crumb fermentation timing' },
+      { id: 'thread-10', title: 'CSS color-mix theming guide', snippet: 'Adaptive light and dark surfaces' },
+      { id: 'thread-11', title: 'Neovim LSP configuration', snippet: 'Tree-sitter and diagnostics' },
+      { id: 'thread-12', title: 'Orbital mechanics deep dive', snippet: 'Specific orbital energy' },
+      { id: 'thread-13', title: 'Wayland clipboard troubleshooting', snippet: 'wl-copy and xwayland' },
+      { id: 'thread-14', title: 'GE-Proton shader cache paths', snippet: 'Steam compatibility data' },
+      { id: 'thread-15', title: 'Quicksort partition invariants', snippet: 'Hoare vs Lomuto schemes' },
+    ];
+
+    window.__lastOpenedThreadId = null;
+    window.__selectedThreadId = 'thread-1';
+    let sidebarEl = null;
+    const collapsedRail = document.getElementById('collapsed-rail');
+    const openSidebarBtn = collapsedRail.querySelector('button[jsname="JIu0P"]');
+
+    function closeSidebar() {
+      if (sidebarEl) {
+        sidebarEl.remove();
+        sidebarEl = null;
+      }
+      document.body.classList.remove('K9MSg');
+      if (!collapsedRail.contains(openSidebarBtn)) {
+        collapsedRail.prepend(openSidebarBtn);
+      }
+      collapsedRail.style.display = 'flex';
+    }
+
+    function openSidebar() {
+      if (sidebarEl) return;
+      openSidebarBtn.remove();
+      collapsedRail.style.display = 'none';
+      document.body.classList.add('K9MSg');
+
+      const nav = document.createElement('div');
+      nav.className = 'ho072b j2vKLc';
+      nav.setAttribute('data-xid', 'BVEPif');
+      nav.setAttribute('role', 'navigation');
+      nav.setAttribute('tabindex', '-1');
+      nav.setAttribute('aria-label', 'AI Mode history');
+
+      const topRow = document.createElement('div');
+      topRow.className = 'sidebar-top';
+      const brand = document.createElement('strong');
+      brand.textContent = 'Google';
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'OxKcRe';
+      closeBtn.setAttribute('aria-label', 'Close sidebar');
+      closeBtn.textContent = '✕';
+      closeBtn.addEventListener('click', closeSidebar);
+      topRow.appendChild(brand);
+      topRow.appendChild(closeBtn);
+      nav.appendChild(topRow);
+
+      const headerSlot = document.createElement('div');
+      nav.appendChild(headerSlot);
+
+      const outerScroll = document.createElement('div');
+      outerScroll.className = 'XOpo9c';
+      const viewport = document.createElement('div');
+      viewport.className = 'cIl10d';
+      viewport.setAttribute('tabindex', '0');
+
+      const threadsViewContainer = document.createElement('div');
+      threadsViewContainer.id = 'aim-lhs-panel-threads-view-container';
+      threadsViewContainer.className = 'TSe88';
+
+      const threadsView = document.createElement('div');
+      threadsView.className = 'nSqbM';
+      threadsView.setAttribute('data-xid', 'aim-threads-view');
+      threadsView.setAttribute('data-lhs-content-ready', '');
+
+      const heading = document.createElement('div');
+      heading.className = 'nNFeYb';
+      heading.setAttribute('role', 'heading');
+      heading.setAttribute('aria-level', '2');
+      heading.textContent = 'Recent';
+
+      const listRoot = document.createElement('div');
+      listRoot.className = 'BqVL3e';
+      listRoot.setAttribute('data-xid', 'threads-list-root');
+      listRoot.setAttribute('role', 'list');
+
+      threadsView.appendChild(heading);
+      threadsView.appendChild(listRoot);
+      threadsViewContainer.appendChild(threadsView);
+      viewport.appendChild(threadsViewContainer);
+      outerScroll.appendChild(viewport);
+      nav.appendChild(outerScroll);
+
+      function renderThreads(query, isSearchMode) {
+        const q = (query || '').trim().toLowerCase();
+        heading.textContent = isSearchMode ? 'Threads' : 'Recent';
+        listRoot.textContent = '';
+
+        const filtered = q
+          ? MOCK_THREADS.filter(
+              (t) => t.title.toLowerCase().includes(q) || t.snippet.toLowerCase().includes(q),
+            )
+          : MOCK_THREADS;
+
+        filtered.forEach((thread, idx) => {
+          const item = document.createElement('div');
+          item.className = 'j8c53';
+          item.setAttribute('role', 'listitem');
+          item.setAttribute('aria-posinset', String(idx + 1));
+          item.setAttribute('aria-setsize', String(filtered.length));
+
+          const dh = document.createElement('div');
+          dh.className = 'DHVRqe';
+          dh.setAttribute('role', 'presentation');
+
+          const yh = document.createElement('div');
+          yh.className = 'YHsVn';
+
+          const row = document.createElement('div');
+          row.className = 'u987h' + (thread.id === window.__selectedThreadId ? ' cp7uzb' : '');
+          row.setAttribute('role', 'presentation');
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.id = `BAyyLe${thread.id}`;
+          btn.className = 'qqMZif';
+          btn.setAttribute('data-thread-id', thread.id);
+          btn.setAttribute('aria-label', `${thread.title}, ${idx + 1} of ${filtered.length}`);
+          if (thread.id === window.__selectedThreadId) {
+            btn.setAttribute('aria-current', 'true');
+          }
+          btn.textContent = thread.title;
+          btn.addEventListener('click', () => {
+            window.__lastOpenedThreadId = thread.id;
+            window.__selectedThreadId = thread.id;
+            const prompt = document.querySelector('textarea.ITIRGe');
+            if (prompt) prompt.focus();
+          });
+
+          const menuSlot = document.createElement('div');
+          menuSlot.className = 'MW5ipb';
+          menuSlot.setAttribute('role', 'presentation');
+          const menuBtn = document.createElement('button');
+          menuBtn.type = 'button';
+          menuBtn.className = 'fMed7';
+          menuBtn.setAttribute('role', 'button');
+          menuBtn.setAttribute('aria-label', `more options for ${thread.title}`);
+          menuBtn.textContent = '⋮';
+          menuSlot.appendChild(menuBtn);
+
+          row.appendChild(btn);
+          row.appendChild(menuSlot);
+          yh.appendChild(row);
+          dh.appendChild(yh);
+          item.appendChild(dh);
+          listRoot.appendChild(item);
+        });
+      }
+
+      function showDefaultHeader() {
+        headerSlot.textContent = '';
+        const actionBar = document.createElement('div');
+        actionBar.className = 'FBq0Sd';
+
+        const newBtn = document.createElement('button');
+        newBtn.type = 'button';
+        newBtn.className = 'L9tyXb';
+        newBtn.setAttribute('jsaction', 'click:&KJJZid_b|WIC9ce');
+        const newSpan = document.createElement('span');
+        newSpan.className = 'd2ZKhf';
+        newSpan.textContent = 'New thread';
+        newBtn.appendChild(newSpan);
+
+        const searchBtn = document.createElement('button');
+        searchBtn.type = 'button';
+        searchBtn.className = 'L9tyXb';
+        searchBtn.setAttribute('jsaction', 'click:&KJJZid_b|MR4M8b');
+        const searchSpan = document.createElement('span');
+        searchSpan.className = 'd2ZKhf';
+        searchSpan.textContent = 'Search threads';
+        searchBtn.appendChild(searchSpan);
+        searchBtn.addEventListener('click', () => {
+          // Simulate brief async mount like live Google AI Mode
+          setTimeout(showSearchHeader, 20);
+        });
+
+        actionBar.appendChild(newBtn);
+        actionBar.appendChild(searchBtn);
+        headerSlot.appendChild(actionBar);
+        renderThreads('', false);
+      }
+
+      function showSearchHeader() {
+        headerSlot.textContent = '';
+        const searchHeader = document.createElement('div');
+        searchHeader.className = 'uTGOrc';
+
+        const exitBtn = document.createElement('button');
+        exitBtn.type = 'button';
+        exitBtn.className = 'Amkkpc';
+        exitBtn.setAttribute('jsaction', 'click:.CLIENT');
+        exitBtn.setAttribute('aria-label', 'Exit search');
+        exitBtn.textContent = '←';
+        exitBtn.addEventListener('click', showDefaultHeader);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'LudIE';
+        input.setAttribute('placeholder', 'Search threads');
+        input.setAttribute('jsaction', 'input:.CLIENT;focus:.CLIENT');
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'Amkkpc';
+        clearBtn.setAttribute('aria-label', 'Clear text');
+        clearBtn.setAttribute('role', 'button');
+        clearBtn.setAttribute('tabindex', '0');
+        clearBtn.textContent = '✕';
+        clearBtn.hidden = true;
+
+        clearBtn.addEventListener('click', () => {
+          input.value = '';
+          clearBtn.hidden = true;
+          renderThreads('', true);
+          input.focus();
+        });
+
+        input.addEventListener('input', () => {
+          clearBtn.hidden = !input.value;
+          renderThreads(input.value, true);
+        });
+
+        searchHeader.appendChild(exitBtn);
+        searchHeader.appendChild(input);
+        searchHeader.appendChild(clearBtn);
+        headerSlot.appendChild(searchHeader);
+
+        renderThreads('', true);
+        input.focus();
+      }
+
+      showDefaultHeader();
+      document.body.appendChild(nav);
+      sidebarEl = nav;
+    }
+
+    openSidebarBtn.addEventListener('click', () => {
+      // Simulate brief async sidebar mount like live Google AI Mode
+      setTimeout(openSidebar, 20);
+    });
+  </script>
+
+  <!-- Load the exact built Tampermonkey userscript -->
+  <script src="/dist/google-ai-search-shortcuts.user.js"></script>
+</body>
+</html>

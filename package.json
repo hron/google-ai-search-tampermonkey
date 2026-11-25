@@ -1,0 +1,23 @@
+{
+  "name": "google-ai-search-tampermonkey",
+  "version": "0.1.0",
+  "description": "Tampermonkey userscript adding missing keyboard shortcuts to Google Search AI Mode (google.com/search)",
+  "author": "Aleksei Gusev",
+  "homepage": "https://github.com/hron/google-ai-search-tampermonkey#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hron/google-ai-search-tampermonkey.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hron/google-ai-search-tampermonkey/issues"
+  },
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:firefox": "node scripts/test-firefox.mjs",
+    "check": "npm run build && npm test",
+    "dev": "node scripts/dev-server.mjs"
+  }
+}

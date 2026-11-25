@@ -6,6 +6,7 @@ const CHIP_OVERLAY_LINK_SELECTOR = 'a.PMDqCb, a.rA9BFb';
 const CHIP_BUTTON_SELECTOR = 'button[data-amic="true"]';
 const RELATED_LINKS_DIALOG_SELECTOR = '[role="dialog"].jR6h';
 const DIALOG_VIEWPORT_MARGIN_PX = 16;
+const SYNTHETIC_POINTER_EVENTS = ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
 
 export const CITATION_CHIPS_STYLES = `
 ${RELATED_LINKS_DIALOG_SELECTOR},
@@ -98,21 +99,48 @@ export function createCitationChipsFeature({ doc = document, observe = true } = 
     }
   }
 
+  function findChipButtonForEvent(event) {
+    const el = resolveNode(event?.target);
+    if (!el) return null;
+    const overlay = el.closest(CHIP_OVERLAY_LINK_SELECTOR);
+    if (overlay) {
+      const button = overlay.parentElement?.querySelector?.(CHIP_BUTTON_SELECTOR);
+      return button && typeof button.click === 'function' ? { button, viaOverlay: true } : null;
+    }
+    const button = el.closest(CHIP_BUTTON_SELECTOR);
+    if (button && typeof button.click === 'function') {
+      return { button, viaOverlay: false };
+    }
+    return null;
+  }
+
+  function handleSyntheticPointer(event) {
+    if (!event || event.isTrusted !== false) return;
+    if (!findChipButtonForEvent(event)) return;
+
+    // Vimium dispatches synthetic mousedown/mouseup before click. Google's
+    // outside-click handler closes any currently open Related links dialog on
+    // mouseup, which suppresses opening the newly clicked chip's dialog.
+    // Stopping synthetic pointer/mouse events lets the subsequent click switch
+    // the open dialog directly in-place without closing it first.
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
+    }
+  }
+
   function handleClick(event) {
     if (!event || event.isTrusted !== false) return;
-    const el = resolveNode(event.target);
-    if (!el) return;
-    const overlay = el.closest(CHIP_OVERLAY_LINK_SELECTOR);
-    if (!overlay) return;
-    const button = overlay.parentElement?.querySelector?.(CHIP_BUTTON_SELECTOR);
-    if (!button || typeof button.click !== 'function') return;
+    const match = findChipButtonForEvent(event);
+    if (!match || !match.viaOverlay) return;
 
     event.preventDefault();
     event.stopPropagation();
     if (typeof event.stopImmediatePropagation === 'function') {
       event.stopImmediatePropagation();
     }
-    button.click();
+    match.button.click();
     scheduleClamp();
   }
 
@@ -122,6 +150,9 @@ export function createCitationChipsFeature({ doc = document, observe = true } = 
 
   function init() {
     ensureStylesInjected();
+    for (const type of SYNTHETIC_POINTER_EVENTS) {
+      clickTarget.addEventListener(type, handleSyntheticPointer, true);
+    }
     clickTarget.addEventListener('click', handleClick, true);
     if (view && typeof view.addEventListener === 'function') {
       view.addEventListener('resize', handleResize);
@@ -146,6 +177,9 @@ export function createCitationChipsFeature({ doc = document, observe = true } = 
   }
 
   function destroy() {
+    for (const type of SYNTHETIC_POINTER_EVENTS) {
+      clickTarget.removeEventListener(type, handleSyntheticPointer, true);
+    }
     clickTarget.removeEventListener('click', handleClick, true);
     if (view && typeof view.removeEventListener === 'function') {
       view.removeEventListener('resize', handleResize);

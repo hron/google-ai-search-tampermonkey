@@ -71,7 +71,12 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
     },
   };
 
-  const button = { tagName: 'BUTTON', clicked: 0, click() { this.clicked += 1; } };
+  const button = {
+    tagName: 'BUTTON',
+    clicked: 0,
+    click() { this.clicked += 1; },
+    closest: (sel) => (sel.includes('button[data-amic="true"]') ? button : null),
+  };
   const chip = { tagName: 'SPAN' };
   const anchor = {
     tagName: 'A',
@@ -93,9 +98,9 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
     closest: () => null,
   };
 
-  const fire = (target, props = {}) => {
+  const fire = (target, props = {}, type = 'click') => {
     const ev = {
-      type: 'click',
+      type,
       target,
       isTrusted: false,
       defaultPrevented: false,
@@ -105,7 +110,7 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
       stopImmediatePropagation() { this.stopped = true; },
       ...props,
     };
-    for (const l of listeners.filter((x) => x.type === 'click')) l.fn(ev);
+    for (const l of listeners.filter((x) => x.type === type)) l.fn(ev);
     return ev;
   };
 
@@ -221,6 +226,30 @@ describe('citation-chips feature (Vimium compatibility & full-height links dialo
     env.doc.defaultView.innerHeight = 600;
     env.fireResize();
     assert.equal(dialog.style.top, '94px');
+
+    feature.destroy();
+  });
+
+  it('suppresses synthetic mousedown/mouseup/pointerdown/pointerup on citation chips so switching dialogs works in one click', () => {
+    const env = createEnv();
+    const feature = createCitationChipsFeature({ doc: env.doc, observe: false });
+    feature.init();
+
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
+      for (const target of [env.anchor, env.altAnchor, env.button]) {
+        const synthEv = env.fire(target, { isTrusted: false }, type);
+        assert.equal(synthEv.defaultPrevented, true, `synthetic ${type} on chip must be prevented`);
+        assert.equal(synthEv.stopped, true, `synthetic ${type} on chip must stop propagation`);
+
+        const trustedEv = env.fire(target, { isTrusted: true }, type);
+        assert.equal(trustedEv.defaultPrevented, false, `trusted ${type} on chip must stay untouched`);
+        assert.equal(trustedEv.stopped, false, `trusted ${type} on chip must not stop propagation`);
+      }
+
+      const plainEv = env.fire(env.plainLink, { isTrusted: false }, type);
+      assert.equal(plainEv.defaultPrevented, false, `synthetic ${type} on ordinary link must stay untouched`);
+      assert.equal(plainEv.stopped, false);
+    }
 
     feature.destroy();
   });

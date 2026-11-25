@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { createUserscriptHeader } from '../src/meta.js';
 
@@ -25,7 +26,7 @@ function stripModuleSyntax(code) {
   return stripped.trim();
 }
 
-function build() {
+export function buildUserscript({ write = true, log = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
   const header = createUserscriptHeader({ version: pkg.version });
 
@@ -49,11 +50,19 @@ ${sections.join('\n\n')}
 `;
   const meta = `${header}\n`;
 
-  fs.mkdirSync(DIST_DIR, { recursive: true });
-  fs.writeFileSync(OUTPUT_FILE, bundle, 'utf8');
-  fs.writeFileSync(META_OUTPUT_FILE, meta, 'utf8');
-  console.log(`Built ${path.relative(ROOT_DIR, OUTPUT_FILE)} (${bundle.length} bytes)`);
-  console.log(`Built ${path.relative(ROOT_DIR, META_OUTPUT_FILE)} (${meta.length} bytes)`);
+  if (write) {
+    fs.mkdirSync(DIST_DIR, { recursive: true });
+    fs.writeFileSync(OUTPUT_FILE, bundle, 'utf8');
+    fs.writeFileSync(META_OUTPUT_FILE, meta, 'utf8');
+    if (log) {
+      console.log(`Built ${path.relative(ROOT_DIR, OUTPUT_FILE)} (${bundle.length} bytes)`);
+      console.log(`Built ${path.relative(ROOT_DIR, META_OUTPUT_FILE)} (${meta.length} bytes)`);
+    }
+  }
+
+  return { bundle, meta, version: pkg.version };
 }
 
-build();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  buildUserscript({ write: true, log: true });
+}

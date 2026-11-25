@@ -442,6 +442,12 @@
         collapsedRail.prepend(openSidebarBtn);
       }
       collapsedRail.style.display = 'flex';
+      // Mirror live Google AI Mode: collapse transition steals focus to Open sidebar after transitionend
+      setTimeout(() => {
+        if (!sidebarEl && collapsedRail.contains(openSidebarBtn)) {
+          openSidebarBtn.focus();
+        }
+      }, 120);
     }
 
     function openSidebar() {
@@ -573,7 +579,7 @@
         });
       }
 
-      function showDefaultHeader() {
+      function showDefaultHeader({ focusSearchBtn = false } = {}) {
         headerSlot.textContent = '';
         const actionBar = document.createElement('div');
         actionBar.className = 'FBq0Sd';
@@ -604,6 +610,15 @@
         actionBar.appendChild(searchBtn);
         headerSlot.appendChild(actionBar);
         renderThreads('', false);
+
+        if (focusSearchBtn) {
+          // Mirror live Google AI Mode: Exit search moves focus onto "Search threads" button
+          setTimeout(() => {
+            if (sidebarEl && sidebarEl.contains(searchBtn)) {
+              searchBtn.focus();
+            }
+          }, 20);
+        }
       }
 
       function showSearchHeader() {
@@ -617,7 +632,7 @@
         exitBtn.setAttribute('jsaction', 'click:.CLIENT');
         exitBtn.setAttribute('aria-label', 'Exit search');
         exitBtn.textContent = '←';
-        exitBtn.addEventListener('click', showDefaultHeader);
+        exitBtn.addEventListener('click', () => showDefaultHeader({ focusSearchBtn: true }));
 
         const input = document.createElement('input');
         input.type = 'text';

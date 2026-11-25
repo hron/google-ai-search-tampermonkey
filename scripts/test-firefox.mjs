@@ -407,21 +407,21 @@ async function verifyAiModeScenario(context, url, label) {
   assert.equal(afterEnter.sidebarOpen, false, `${label}: Ctrl+K-opened sidebar collapses after Enter`);
   assert.equal(afterEnter.promptFocused, true, `${label}: focus returns to main prompt textarea`);
 
-  // Ctrl+K then Escape -> collapses Ctrl+K-opened sidebar and returns focus to prompt
+  // Ctrl+K then Escape -> collapses Ctrl+K-opened sidebar and returns focus to prompt (surviving async focus steal)
   await pressCtrl('k', 300);
   assert.equal((await getSearchState()).searchOpen, true, `${label}: Ctrl+K re-opens search`);
-  await press('\uE00C', false, 200);
+  await press('\uE00C', false, 260);
   const afterEsc = await getSearchState();
   assert.equal(afterEsc.sidebarOpen, false, `${label}: Escape collapses Ctrl+K-opened sidebar`);
   assert.equal(afterEsc.promptFocused, true, `${label}: Escape restores focus to prompt textarea`);
 
-  // Manually open sidebar first, then Ctrl+K -> Escape exits search while keeping sidebar open
+  // Manually open sidebar first, then Ctrl+K -> Escape exits search while keeping sidebar open and prompt focused
   await evalJson(`(() => { document.querySelector('button[jsname="JIu0P"]').click(); return true; })()`);
   await new Promise((r) => setTimeout(r, 150));
   assert.equal((await getSearchState()).sidebarOpen, true, `${label}: sidebar manually opened`);
   await pressCtrl('k', 250);
   assert.equal((await getSearchState()).searchOpen, true, `${label}: Ctrl+K enters search from open sidebar`);
-  await press('\uE00C', false, 200);
+  await press('\uE00C', false, 260);
   const afterEscPinned = await getSearchState();
   assert.equal(afterEscPinned.searchOpen, false, `${label}: Escape exits search mode`);
   assert.equal(afterEscPinned.sidebarOpen, true, `${label}: manually opened sidebar stays open after Escape`);

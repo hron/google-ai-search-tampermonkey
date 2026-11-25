@@ -13,6 +13,7 @@ export const SEARCH_ACTIVE_ROW_ATTR = 'data-gaism-search-active-row';
 
 const SEARCH_OPTION_ID_PREFIX = 'gaism-search-option-';
 const PENDING_OPEN_TIMEOUT_MS = 2500;
+const RESTORE_FOCUS_WINDOW_MS = 800;
 
 const SEARCH_INPUT_SELECTOR =
   'input.LudIE, .uTGOrc input:not([type="hidden"]), input[type="search"], input[placeholder*="Search" i]:not([type="hidden"]), input[type="text"]:not([type="hidden"])';
@@ -314,8 +315,116 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
   let pendingOpenTimer = null;
   let clickedSearchTrigger = null;
 
+  let restoreFocusActive = false;
+  let restoreFocusExpiryTimer = null;
+  let restoreFocusFollowupTimers = [];
+
   const view = doc.defaultView || null;
   const keyTarget = view || doc;
+
+  function isSidebarFocusStealTarget(el) {
+    if (!el || typeof el.closest !== 'function') return false;
+    if (el.closest(SIDEBAR_SELECTOR)) return true;
+    return Boolean(
+      el.closest('button[jsname="JIu0P"], button[aria-label="Open sidebar"], button.ONx74b'),
+    );
+  }
+
+  function focusPromptIfNeeded() {
+    const prompt = findPromptInput(doc);
+    if (!prompt) return;
+    if (doc.activeElement !== prompt) {
+      focusElement(prompt, doc);
+    }
+  }
+
+  function handleRestoreFocusIn(event) {
+    if (!restoreFocusActive) return;
+    const targetEl = resolveSearchElementNode(event?.target);
+    if (!targetEl || targetEl === doc.body || targetEl === doc.documentElement) {
+      focusPromptIfNeeded();
+      return;
+    }
+    const prompt = findPromptInput(doc);
+    if (
+      prompt &&
+      (targetEl === prompt || (typeof prompt.contains === 'function' && prompt.contains(targetEl)))
+    ) {
+      return;
+    }
+    if (isSidebarFocusStealTarget(targetEl)) {
+      focusPromptIfNeeded();
+    }
+  }
+
+  function handleRestoreCancelPointer() {
+    cancelRestorePromptFocus();
+  }
+
+  function handleRestoreCancelKey(event) {
+    if (event?.key === 'Tab') {
+      cancelRestorePromptFocus();
+    }
+  }
+
+  function cancelRestorePromptFocus() {
+    if (
+      !restoreFocusActive &&
+      restoreFocusExpiryTimer === null &&
+      restoreFocusFollowupTimers.length === 0
+    ) {
+      return;
+    }
+    restoreFocusActive = false;
+    if (restoreFocusExpiryTimer !== null) {
+      clearTimeout(restoreFocusExpiryTimer);
+      restoreFocusExpiryTimer = null;
+    }
+    for (const id of restoreFocusFollowupTimers) {
+      clearTimeout(id);
+    }
+    restoreFocusFollowupTimers = [];
+    if (typeof doc.removeEventListener === 'function') {
+      doc.removeEventListener('focusin', handleRestoreFocusIn, true);
+      doc.removeEventListener('pointerdown', handleRestoreCancelPointer, true);
+      doc.removeEventListener('mousedown', handleRestoreCancelPointer, true);
+      doc.removeEventListener('keydown', handleRestoreCancelKey, true);
+    }
+  }
+
+  function armRestorePromptFocus() {
+    cancelRestorePromptFocus();
+    restoreFocusActive = true;
+    focusPromptIfNeeded();
+
+    if (typeof doc.addEventListener === 'function') {
+      doc.addEventListener('focusin', handleRestoreFocusIn, true);
+      doc.addEventListener('pointerdown', handleRestoreCancelPointer, true);
+      doc.addEventListener('mousedown', handleRestoreCancelPointer, true);
+      doc.addEventListener('keydown', handleRestoreCancelKey, true);
+    }
+
+    for (const delayMs of [0, 50, 200, 450]) {
+      restoreFocusFollowupTimers.push(
+        setTimeout(() => {
+          if (!restoreFocusActive) return;
+          const activeEl = resolveSearchElementNode(doc.activeElement);
+          if (
+            !activeEl ||
+            activeEl === doc.body ||
+            activeEl === doc.documentElement ||
+            isSidebarFocusStealTarget(activeEl)
+          ) {
+            focusPromptIfNeeded();
+          }
+        }, delayMs),
+      );
+    }
+
+    restoreFocusExpiryTimer = setTimeout(() => {
+      cancelRestorePromptFocus();
+    }, RESTORE_FOCUS_WINDOW_MS);
+  }
 
   function clearPendingOpenSearch() {
     pendingOpenSearch = false;
@@ -501,14 +610,12 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
     sync();
 
     if (restoreFocus) {
-      const prompt = findPromptInput(doc);
-      if (prompt) {
-        focusElement(prompt, doc);
-      }
+      armRestorePromptFocus();
     }
   }
 
   function triggerCtrlK() {
+    cancelRestorePromptFocus();
     const existing = findSearchThreadsUI(doc);
     if (existing) {
       clearPendingOpenSearch();
@@ -725,6 +832,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
           const closeBtn = findCloseSidebarButton(findSidebarContainer(doc));
           if (closeBtn && typeof closeBtn.click === 'function') {
             closeBtn.click();
+            armRestorePromptFocus();
           }
         }, 0);
       }
@@ -785,6 +893,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
 
   function destroy() {
     clearPendingOpenSearch();
+    cancelRestorePromptFocus();
     openedSidebarViaShortcut = false;
     keyTarget.removeEventListener('keydown', handleKeyDown, true);
     if (observer) {

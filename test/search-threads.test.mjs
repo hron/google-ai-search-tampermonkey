@@ -134,7 +134,11 @@ function createFakeNode(
     focus() {
       el.focusedCount += 1;
       if (el.ownerDocument) {
+        const prev = el.ownerDocument.activeElement;
         el.ownerDocument.activeElement = el;
+        if (prev !== el) {
+          el.ownerDocument.dispatchEvent(createFakeEvent('focusin', { target: el, relatedTarget: prev }));
+        }
       }
     },
     select() {
@@ -1001,6 +1005,78 @@ describe('search-threads feature (Ctrl+K & keyboard navigation)', () => {
     assert.equal(ev.defaultPrevented, true);
     assert.equal(sidebar.buttons[1].getAttribute(SEARCH_ACTIVE_ATTR), 'true');
     assert.equal(env.doc.activeElement, sidebar.searchInput);
+
+    feature.destroy();
+  });
+
+  it('restores focus to prompt textarea even when Google asynchronously steals focus on Close sidebar or Exit search', async () => {
+    // Case 1: Collapsed sidebar -> Ctrl+K -> Escape; Google clears focus to body then focuses Open sidebar after transition
+    const env1 = createFakeAiSearchEnv({ threadCount: 3 });
+    const feature1 = createSearchThreadsFeature({ doc: env1.doc, observe: false });
+    feature1.init();
+
+    env1.dispatchKey('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, target: env1.promptInput });
+    const sidebar1 = env1.getSidebar();
+    assert.ok(sidebar1?.searchInput);
+
+    sidebar1.closeSidebarBtn.addEventListener('click', () => {
+      // Simulate Google's collapse behavior: immediately drops focus to body, then focuses Open sidebar after transition
+      env1.doc.activeElement = env1.body;
+      setTimeout(() => {
+        env1.openSidebarBtn.focus();
+      }, 20);
+    });
+
+    env1.dispatchKey('keydown', { key: 'Escape', target: sidebar1.searchInput });
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(
+      env1.doc.activeElement,
+      env1.promptInput,
+      'focus must return to prompt textarea after async Close sidebar transition',
+    );
+    feature1.destroy();
+
+    // Case 2: Already-open sidebar -> Ctrl+K -> Escape; Google asynchronously focuses "Search threads" button
+    const env2 = createFakeAiSearchEnv({ threadCount: 3 });
+    const sidebar2 = env2.mountSidebar({ inSearchMode: false });
+    const feature2 = createSearchThreadsFeature({ doc: env2.doc, observe: false });
+    feature2.init();
+
+    env2.doc.activeElement = env2.promptInput;
+    env2.dispatchKey('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, target: env2.promptInput });
+    assert.ok(sidebar2.searchInput);
+
+    sidebar2.exitSearchBtn.addEventListener('click', () => {
+      setTimeout(() => {
+        sidebar2.searchThreadsBtn?.focus();
+      }, 15);
+    });
+
+    env2.dispatchKey('keydown', { key: 'Escape', target: sidebar2.searchInput });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(
+      env2.doc.activeElement,
+      env2.promptInput,
+      'focus must return to prompt textarea after async Exit search focus steal',
+    );
+    feature2.destroy();
+  });
+
+  it('cancels Escape focus restoration immediately if the user clicks or presses Tab elsewhere', async () => {
+    const env = createFakeAiSearchEnv({ threadCount: 3 });
+    const feature = createSearchThreadsFeature({ doc: env.doc, observe: false });
+    feature.init();
+
+    env.dispatchKey('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, target: env.promptInput });
+    const sidebar = env.getSidebar();
+    env.dispatchKey('keydown', { key: 'Escape', target: sidebar.searchInput });
+    assert.equal(env.doc.activeElement, env.promptInput);
+
+    // User clicks Open sidebar intentionally -> must not be overridden back to prompt
+    env.doc.dispatchEvent(createFakeEvent('pointerdown', { target: env.openSidebarBtn }));
+    env.openSidebarBtn.focus();
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(env.doc.activeElement, env.openSidebarBtn);
 
     feature.destroy();
   });

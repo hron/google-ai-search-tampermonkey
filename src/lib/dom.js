@@ -7,6 +7,9 @@ export const PROMPT_INPUT_SELECTOR =
 export const SIDEBAR_SELECTOR =
   '[role="navigation"][data-xid="BVEPif"], [role="navigation"][aria-label="AI Mode history"], nav[aria-label="AI Mode history"]';
 
+// User prompt bubbles inside the AI Mode conversation thread
+export const USER_PROMPT_SELECTOR = '.ilZyRc.R7mRQb, .Ax52xb';
+
 export function toPageOptions(obj, doc = document) {
   const view = doc?.defaultView;
   if (typeof cloneInto === 'function' && view) {
@@ -104,6 +107,30 @@ export function findThreadScroller(doc = document) {
   }
 
   return doc.scrollingElement || doc.documentElement || doc.body || null;
+}
+
+function isDocumentScroller(scroller, doc) {
+  return scroller === doc.scrollingElement || scroller === doc.documentElement || scroller === doc.body;
+}
+
+/**
+ * Returns the positions of user prompts in the scroller's scrollTop coordinates.
+ */
+export function findUserPromptOffsets(doc = document, scroller = findThreadScroller(doc)) {
+  if (!doc || !scroller || typeof doc.querySelectorAll !== 'function') return [];
+  let baseTop = 0;
+  if (!isDocumentScroller(scroller, doc) && typeof scroller.getBoundingClientRect === 'function') {
+    baseTop = scroller.getBoundingClientRect().top || 0;
+  }
+  const scrollTop = scroller.scrollTop || 0;
+  const offsets = [];
+  for (const el of Array.from(doc.querySelectorAll(USER_PROMPT_SELECTOR))) {
+    if (typeof el.getBoundingClientRect !== 'function') continue;
+    const rect = el.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) continue;
+    offsets.push(rect.top - baseTop + scrollTop);
+  }
+  return offsets;
 }
 
 export function createDocumentScrollerOptions(doc = document) {

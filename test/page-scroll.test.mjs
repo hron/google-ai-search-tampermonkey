@@ -5,7 +5,11 @@ import {
   PAGE_SCROLL_FEATURE_ID,
   createPageScrollFeature,
 } from '../src/features/page-scroll.js';
-import { ARROW_SCROLL_STEP_PX, computePageStep } from '../src/lib/scrolling.js';
+import {
+  ARROW_SCROLL_STEP_PX,
+  PROMPT_SCROLL_MARGIN_PX,
+  computePageStep,
+} from '../src/lib/scrolling.js';
 
 function createFakeElement(
   tag,
@@ -740,5 +744,160 @@ describe('page-scroll feature (Google Search AI Mode)', () => {
     assert.equal(env.frames.size, 0);
 
     feature.destroy();
+  });
+
+  describe('Ctrl+Alt+[ / Ctrl+Alt+] prompt navigation', () => {
+    const PROMPT_OFFSETS = [200, 1200, 2400, 3600];
+    const SCROLLER_RECT_TOP = 120;
+
+    function addPrompts(env, offsets = PROMPT_OFFSETS) {
+      const isInternal = env.scroller === env.turnRoot;
+      env.turnRoot.getBoundingClientRect = () => ({ top: SCROLLER_RECT_TOP, width: 900, height: 700 });
+      for (const offset of offsets) {
+        const prompt = createFakeElement('div', { classes: ['ilZyRc', 'R7mRQb'] });
+        prompt.getBoundingClientRect = () => ({
+          top: (isInternal ? SCROLLER_RECT_TOP : 0) + offset - env.scroller.scrollTop,
+          width: 500,
+          height: 40,
+        });
+        env.turnRoot.appendChild(prompt);
+      }
+    }
+
+    const jumpKey = (env, dir, props = {}) =>
+      env.dispatchKey('keydown', {
+        key: dir < 0 ? '[' : ']',
+        code: dir < 0 ? 'BracketLeft' : 'BracketRight',
+        ctrlKey: true,
+        altKey: true,
+        target: env.input,
+        ...props,
+      });
+
+    const aligned = (offset) => offset - PROMPT_SCROLL_MARGIN_PX;
+
+    it('smoothly scrolls to the previous / next prompt while the prompt input is focused', () => {
+      const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, clientHeight: 800, scrollHeight: 6000 });
+      addPrompts(env);
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      const ev = jumpKey(env, -1);
+      assert.equal(ev.defaultPrevented, true);
+      assert.equal(ev.propagationStopped, true);
+      assert.equal(env.doc.activeElement, env.input);
+
+      env.advanceMs(50);
+      const mid = env.scroller.scrollTop;
+      assert.ok(mid < 1500 && mid > aligned(1200), `expected smooth mid-flight scrollTop, got ${mid}`);
+      env.advanceMs(1500);
+      assert.equal(env.scroller.scrollTop, aligned(1200));
+      assert.equal(env.frames.size, 0);
+
+      jumpKey(env, 1);
+      env.advanceMs(1500);
+      assert.equal(env.scroller.scrollTop, aligned(2400));
+
+      feature.destroy();
+    });
+
+    it('works with text in the prompt and accumulates rapid presses from the in-flight target', () => {
+      const env = createFakeAiSearchPageEnv({ initialScrollTop: 0, clientHeight: 800, scrollHeight: 6000 });
+      addPrompts(env);
+      env.input.value = 'draft question';
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      jumpKey(env, 1);
+      env.advanceMs(33);
+      jumpKey(env, 1, { repeat: true });
+      env.advanceMs(33);
+      jumpKey(env, 1);
+      env.advanceMs(1500);
+      assert.equal(env.scroller.scrollTop, aligned(2400));
+
+      feature.destroy();
+    });
+
+    it('supports the internal turn-root scroller and falls back to the edges past the first / last prompt', () => {
+      const env = createFakeAiSearchPageEnv({
+        initialScrollTop: 3700,
+        clientHeight: 700,
+        scrollHeight: 6000,
+        internalScroller: true,
+      });
+      addPrompts(env);
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      jumpKey(env, 1);
+      env.advanceMs(1500);
+      assert.equal(env.turnRoot.scrollTop, 6000 - 700);
+
+      jumpKey(env, -1);
+      env.advanceMs(1500);
+      assert.equal(env.turnRoot.scrollTop, aligned(3600));
+      assert.equal(env.html.scrollTop, 0);
+
+      env.turnRoot.scrollTop = 100;
+      jumpKey(env, -1);
+      env.advanceMs(1500);
+      assert.equal(env.turnRoot.scrollTop, 0);
+
+      feature.destroy();
+    });
+
+    it('ignores the shortcut outside the prompt input, with extra modifiers, without Ctrl+Alt, or on non-AI pages', () => {
+      const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, scrollHeight: 6000 });
+      addPrompts(env);
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      for (const props of [
+        { ctrlKey: false },
+        { altKey: false },
+        { shiftKey: true },
+        { metaKey: true },
+        { isComposing: true },
+      ]) {
+        const ev = jumpKey(env, 1, props);
+        assert.equal(ev.defaultPrevented, false, JSON.stringify(props));
+      }
+
+      env.doc.activeElement = env.body;
+      const outside = jumpKey(env, 1, { target: env.body });
+      assert.equal(outside.defaultPrevented, false);
+
+      env.doc.activeElement = env.otherTextarea;
+      const other = jumpKey(env, 1, { target: env.otherTextarea });
+      assert.equal(other.defaultPrevented, false);
+
+      assert.equal(env.frames.size, 0);
+      assert.equal(env.scroller.scrollTop, 1500);
+      feature.destroy();
+
+      const plain = createFakeAiSearchPageEnv({ search: '?q=weather', aiModeDom: false, scrollHeight: 6000 });
+      const plainFeature = createPageScrollFeature({ doc: plain.doc });
+      plainFeature.init();
+      assert.equal(jumpKey(plain, 1).defaultPrevented, false);
+      plainFeature.destroy();
+    });
+
+    it('stops an in-flight prompt glide when PageUp/ArrowUp scrolling starts', () => {
+      const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, scrollHeight: 6000 });
+      addPrompts(env);
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      jumpKey(env, 1);
+      env.advanceMs(50);
+      env.dispatchKey('keydown', { key: 'PageUp', target: env.input });
+      env.dispatchKey('keyup', { key: 'PageUp', target: env.input });
+      env.advanceMs(1500);
+      assert.ok(env.scroller.scrollTop < aligned(2400) - 100, `glide should be cancelled, got ${env.scroller.scrollTop}`);
+      assert.equal(env.frames.size, 0);
+
+      feature.destroy();
+    });
   });
 });

@@ -9,6 +9,10 @@ export const ARROW_SPRING_OMEGA = 20;
 export const ARROW_HOLD_DELAY_SEC = 0.16;
 export const ARROW_HOLD_SPEED_PX_PER_SEC = 800;
 
+export const PROMPT_SCROLL_MARGIN_PX = 16;
+export const PROMPT_SPRING_OMEGA = 14;
+const PROMPT_TARGET_EPSILON_PX = 2;
+
 const MAX_FRAME_DT_SEC = 0.05;
 const DEFAULT_FIRST_FRAME_DT_SEC = 1 / 60;
 const SETTLE_POSITION_EPSILON_PX = 0.5;
@@ -79,7 +83,7 @@ function setScrollTopInstant(scroller, top) {
   scroller.scrollTop = top;
 }
 
-function getMaxScrollTop(scroller) {
+export function getMaxScrollTop(scroller) {
   if (!scroller) return 0;
   const scrollHeight = scroller.scrollHeight || 0;
   const clientHeight = scroller.clientHeight || 0;
@@ -88,6 +92,38 @@ function getMaxScrollTop(scroller) {
 
 function clampScrollTop(value, maxScroll) {
   return Math.max(0, Math.min(maxScroll, value));
+}
+
+/**
+ * Picks the scrollTop that aligns the previous (direction -1) or next (direction 1)
+ * prompt with the top of the scroller (minus a small margin). Past the first / last
+ * prompt it falls back to the top / bottom edge. Returns null when there is nowhere to go.
+ */
+export function computePromptScrollTarget({
+  offsets = [],
+  current = 0,
+  direction,
+  maxScroll = 0,
+  margin = PROMPT_SCROLL_MARGIN_PX,
+} = {}) {
+  const max = Math.max(0, maxScroll);
+  const targets = [...new Set(offsets.map((o) => clampScrollTop(Math.round(o - margin), max)))].sort(
+    (a, b) => a - b,
+  );
+
+  if (direction < 0) {
+    for (let i = targets.length - 1; i >= 0; i -= 1) {
+      if (targets[i] < current - PROMPT_TARGET_EPSILON_PX) return targets[i];
+    }
+    return current > PROMPT_TARGET_EPSILON_PX ? 0 : null;
+  }
+  if (direction > 0) {
+    for (const t of targets) {
+      if (t > current + PROMPT_TARGET_EPSILON_PX) return t;
+    }
+    return current < max - PROMPT_TARGET_EPSILON_PX ? max : null;
+  }
+  return null;
 }
 
 function stepCriticallyDampedSpring(position, velocity, target, omega, dt) {
@@ -279,6 +315,48 @@ function createSpringScroller({
     return true;
   }
 
+  function glideTo(top) {
+    const scroller = typeof getScroller === 'function' ? getScroller() : null;
+    if (!scroller || typeof top !== 'number' || !Number.isFinite(top)) {
+      return false;
+    }
+
+    const maxScroll = getMaxScrollTop(scroller);
+    const clamped = clampScrollTop(top, maxScroll);
+    const reducedMotion = typeof prefersReducedMotion === 'function' && Boolean(prefersReducedMotion());
+    if (typeof requestFrame !== 'function' || reducedMotion) {
+      stop();
+      return applyScrollAction(scroller, {
+        type: 'to',
+        top: clamped,
+        behavior: reducedMotion ? 'instant' : 'smooth',
+      });
+    }
+
+    heldDirections.length = 0;
+    holdElapsed = 0;
+    if (rafId === null || activeScroller !== scroller) {
+      activeScroller = scroller;
+      position = scroller.scrollTop || 0;
+      velocity = 0;
+      lastAppliedScrollTop = position;
+      lastTimestamp = null;
+    }
+    target = clamped;
+
+    if (rafId === null) {
+      if (Math.abs(target - position) < SETTLE_POSITION_EPSILON_PX) {
+        return true;
+      }
+      rafId = requestFrame(tick);
+    }
+    return true;
+  }
+
+  function getTarget() {
+    return target;
+  }
+
   function release(direction) {
     const idx = heldDirections.indexOf(direction);
     if (idx === -1) return;
@@ -295,6 +373,8 @@ function createSpringScroller({
   return {
     press,
     release,
+    glideTo,
+    getTarget,
     stop,
     isActive,
   };
@@ -325,5 +405,19 @@ export function createSmoothArrowScroller(options = {}) {
     getHoldSpeedPxPerSec: () => ARROW_HOLD_SPEED_PX_PER_SEC,
     holdDelaySec: ARROW_HOLD_DELAY_SEC,
     springOmega: ARROW_SPRING_OMEGA,
+  });
+}
+
+/**
+ * Smoothly glides to absolute scroll positions (e.g. previous / next prompt)
+ * via requestAnimationFrame using a critically damped spring.
+ */
+export function createSmoothPromptScroller(options = {}) {
+  return createSpringScroller({
+    ...options,
+    getStepPx: computePageStep,
+    getHoldSpeedPxPerSec: () => 0,
+    holdDelaySec: Infinity,
+    springOmega: PROMPT_SPRING_OMEGA,
   });
 }

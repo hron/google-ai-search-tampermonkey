@@ -2,10 +2,17 @@ import {
   SIDEBAR_SELECTOR,
   createDocumentScrollerOptions,
   findThreadScroller,
+  findUserPromptOffsets,
   isAiModePage,
   resolvePromptInputElement,
 } from '../lib/dom.js';
-import { createSmoothArrowScroller, createSmoothPageScroller } from '../lib/scrolling.js';
+import {
+  computePromptScrollTarget,
+  createSmoothArrowScroller,
+  createSmoothPageScroller,
+  createSmoothPromptScroller,
+  getMaxScrollTop,
+} from '../lib/scrolling.js';
 
 export const PAGE_SCROLL_FEATURE_ID = 'page-scroll';
 
@@ -152,19 +159,72 @@ function shouldHandleScrollKey(event, doc, scroller, action) {
   return Boolean(activeEl.closest('[role="main"]') || activeEl === scroller);
 }
 
+function getPromptJumpDirection(event) {
+  if (!event || !event.ctrlKey || !event.altKey || event.metaKey || event.shiftKey) return 0;
+  if (event.isComposing || event.keyCode === 229) return 0;
+  if (event.code === 'BracketLeft' || event.key === '[') return -1;
+  if (event.code === 'BracketRight' || event.key === ']') return 1;
+  return 0;
+}
+
+function shouldHandlePromptJump(event, doc, scroller) {
+  if (!isAiModePage(doc) || !scroller) return false;
+  const activeEl = getPageScrollElementNode(doc.activeElement);
+  const targetEl = getPageScrollElementNode(event.target);
+  if (isInsidePageScrollOverlay(activeEl) || isInsidePageScrollOverlay(targetEl)) return false;
+  return Boolean(resolvePromptInputElement(activeEl) || resolvePromptInputElement(targetEl));
+}
+
+function consumeEvent(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (typeof event.stopImmediatePropagation === 'function') {
+    event.stopImmediatePropagation();
+  }
+}
+
 export function createPageScrollFeature({ doc = document } = {}) {
   const view = doc.defaultView || null;
   const keyTarget = view || doc;
   const scrollerOptions = createDocumentScrollerOptions(doc);
   const pageScroller = createSmoothPageScroller(scrollerOptions);
   const arrowScroller = createSmoothArrowScroller(scrollerOptions);
+  const promptScroller = createSmoothPromptScroller(scrollerOptions);
 
   function stopAll() {
     pageScroller.stop();
     arrowScroller.stop();
+    promptScroller.stop();
+  }
+
+  function handlePromptJump(event, direction) {
+    const scroller = findThreadScroller(doc);
+    if (!shouldHandlePromptJump(event, doc, scroller)) {
+      return;
+    }
+    consumeEvent(event);
+    pageScroller.stop();
+    arrowScroller.stop();
+
+    const current = promptScroller.isActive() ? promptScroller.getTarget() : scroller.scrollTop || 0;
+    const top = computePromptScrollTarget({
+      offsets: findUserPromptOffsets(doc, scroller),
+      current,
+      direction,
+      maxScroll: getMaxScrollTop(scroller),
+    });
+    if (top !== null) {
+      promptScroller.glideTo(top);
+    }
   }
 
   function handleKeyDown(event) {
+    const jumpDirection = getPromptJumpDirection(event);
+    if (jumpDirection !== 0) {
+      handlePromptJump(event, jumpDirection);
+      return;
+    }
+
     const action = getScrollKeyAction(event);
     if (!action) {
       return;
@@ -177,12 +237,9 @@ export function createPageScrollFeature({ doc = document } = {}) {
     const activeController = action.kind === 'page' ? pageScroller : arrowScroller;
     const otherController = action.kind === 'page' ? arrowScroller : pageScroller;
 
-    event.preventDefault();
-    event.stopPropagation();
-    if (typeof event.stopImmediatePropagation === 'function') {
-      event.stopImmediatePropagation();
-    }
+    consumeEvent(event);
     otherController.stop();
+    promptScroller.stop();
     if (!event.repeat || !activeController.isActive()) {
       activeController.press(action.direction);
     }

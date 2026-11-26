@@ -317,6 +317,61 @@ async function verifyAiModeScenario(context, url, label) {
     `${label}: holding PageDown scrolls continuously (${afterDoublePageUp.scrollTop} -> ${afterHoldPageDown.scrollTop})`,
   );
 
+  // ArrowUp / ArrowDown while empty prompt textarea is focused -> scrolls smoothly without leaving textarea
+  const beforeArrowUp = await getState();
+  await press('\uE013', false, 60);
+  const midArrowUp = await getState();
+  await new Promise((r) => setTimeout(r, 450));
+  const afterArrowUp = await getState();
+  assert.equal(afterArrowUp.activeAria, 'Ask anything', `${label}: textarea stays focused on ArrowUp`);
+  assert.ok(
+    afterArrowUp.scrollTop < beforeArrowUp.scrollTop - 40,
+    `${label}: ArrowUp while empty textarea focused scrolls up smoothly (${beforeArrowUp.scrollTop} -> ${afterArrowUp.scrollTop})`,
+  );
+  assert.ok(
+    midArrowUp.scrollTop <= beforeArrowUp.scrollTop && midArrowUp.scrollTop >= afterArrowUp.scrollTop,
+    `${label}: ArrowUp animates monotonically (start=${beforeArrowUp.scrollTop}, mid=${midArrowUp.scrollTop}, end=${afterArrowUp.scrollTop})`,
+  );
+
+  await press('\uE015', false, 450);
+  const afterArrowDown = await getState();
+  assert.equal(afterArrowDown.activeAria, 'Ask anything', `${label}: textarea stays focused on ArrowDown`);
+  assert.ok(
+    afterArrowDown.scrollTop > afterArrowUp.scrollTop + 40,
+    `${label}: ArrowDown while empty textarea focused scrolls back down (${afterArrowUp.scrollTop} -> ${afterArrowDown.scrollTop})`,
+  );
+
+  // Hold ArrowUp scrolls continuously while empty textarea stays focused
+  await send('input.performActions', {
+    context,
+    actions: [{ type: 'key', id: 'kbd', actions: [{ type: 'keyDown', value: '\uE013' }] }],
+  });
+  await new Promise((r) => setTimeout(r, 550));
+  await send('input.performActions', {
+    context,
+    actions: [{ type: 'key', id: 'kbd', actions: [{ type: 'keyUp', value: '\uE013' }] }],
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  const afterHoldArrowUp = await getState();
+  assert.equal(afterHoldArrowUp.activeAria, 'Ask anything', `${label}: textarea stays focused after held ArrowUp`);
+  assert.ok(
+    afterHoldArrowUp.scrollTop < afterArrowDown.scrollTop - 200,
+    `${label}: holding ArrowUp scrolls continuously (${afterArrowDown.scrollTop} -> ${afterHoldArrowUp.scrollTop})`,
+  );
+
+  // Typing text in prompt textarea preserves native ArrowUp/ArrowDown (does not scroll page)
+  await typeText('draft', 100);
+  const beforeTextArrow = await getState();
+  await press('\uE013', false, 200);
+  const afterTextArrow = await getState();
+  assert.equal(
+    afterTextArrow.scrollTop,
+    beforeTextArrow.scrollTop,
+    `${label}: ArrowUp must not hijack scrolling when prompt textarea has text`,
+  );
+  // Clear textarea so subsequent checks start clean
+  await evalJson(`(() => { const ta = document.querySelector('textarea.ITIRGe'); ta.value = ''; ta.focus(); return true; })()`);
+
   // --- Ctrl+K Search Threads E2E ---
   const getSearchState = () =>
     evalJson(`(() => {
@@ -440,10 +495,13 @@ async function verifyRegularSearchUntouched(context, url, label) {
       ta.focus();
       const pgEv = new KeyboardEvent('keydown', { key: 'PageDown', cancelable: true, bubbles: true });
       ta.dispatchEvent(pgEv);
+      const arrowEv = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true, bubbles: true });
+      ta.dispatchEvent(arrowEv);
       const kEv = new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, cancelable: true, bubbles: true });
       ta.dispatchEvent(kEv);
       return {
         pageDownPrevented: pgEv.defaultPrevented,
+        arrowDownPrevented: arrowEv.defaultPrevented,
         ctrlKPrevented: kEv.defaultPrevented,
       };
     })())`,
@@ -452,6 +510,7 @@ async function verifyRegularSearchUntouched(context, url, label) {
   });
   const state = JSON.parse(res.result.value);
   assert.equal(state.pageDownPrevented, false, `${label}: PageDown must not be hijacked on regular search`);
+  assert.equal(state.arrowDownPrevented, false, `${label}: ArrowDown must not be hijacked on regular search`);
   assert.equal(state.ctrlKPrevented, false, `${label}: Ctrl+K must not be hijacked on regular search`);
   console.log(`PASS: ${label}`);
 }

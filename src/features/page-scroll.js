@@ -3,9 +3,9 @@ import {
   createDocumentScrollerOptions,
   findThreadScroller,
   isAiModePage,
-  isPromptInputElement,
+  resolvePromptInputElement,
 } from '../lib/dom.js';
-import { createSmoothPageScroller } from '../lib/scrolling.js';
+import { createSmoothArrowScroller, createSmoothPageScroller } from '../lib/scrolling.js';
 
 export const PAGE_SCROLL_FEATURE_ID = 'page-scroll';
 
@@ -65,11 +65,35 @@ function hasNestedVerticalScroller(el, threadScroller) {
   return false;
 }
 
-function shouldHandlePageScroll(event, doc, scroller) {
-  if (!event || (event.key !== 'PageUp' && event.key !== 'PageDown')) {
+function getScrollKeyAction(event) {
+  if (!event) return null;
+  if (event.key === 'PageUp') return { kind: 'page', direction: -1 };
+  if (event.key === 'PageDown') return { kind: 'page', direction: 1 };
+  if (event.key === 'ArrowUp') return { kind: 'arrow', direction: -1 };
+  if (event.key === 'ArrowDown') return { kind: 'arrow', direction: 1 };
+  return null;
+}
+
+function isPromptInputEmpty(el) {
+  if (!el) return false;
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+    return typeof el.value !== 'string' || el.value.length === 0;
+  }
+  return (el.textContent || '').replace(/[\u200B\r\n]/g, '').length === 0;
+}
+
+function shouldHandleScrollKey(event, doc, scroller, action) {
+  if (!event || !action) {
     return false;
   }
-  if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.isComposing) {
+  if (
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.isComposing ||
+    event.keyCode === 229
+  ) {
     return false;
   }
   if (!isAiModePage(doc)) {
@@ -95,8 +119,19 @@ function shouldHandlePageScroll(event, doc, scroller) {
     return false;
   }
 
-  if (isPromptInputElement(activeEl) || isPromptInputElement(targetEl)) {
-    return true;
+  const promptEl = resolvePromptInputElement(activeEl) || resolvePromptInputElement(targetEl);
+  if (promptEl) {
+    if (action.kind === 'page') {
+      return true;
+    }
+    if (typeof promptEl.getAttribute === 'function' && promptEl.getAttribute('aria-expanded') === 'true') {
+      return false;
+    }
+    return isPromptInputEmpty(promptEl);
+  }
+
+  if (action.kind === 'arrow') {
+    return false;
   }
 
   if (isPageScrollEditableControl(activeEl) || isPageScrollEditableControl(targetEl)) {
@@ -120,35 +155,53 @@ function shouldHandlePageScroll(event, doc, scroller) {
 export function createPageScrollFeature({ doc = document } = {}) {
   const view = doc.defaultView || null;
   const keyTarget = view || doc;
-  const pageScroller = createSmoothPageScroller(createDocumentScrollerOptions(doc));
+  const scrollerOptions = createDocumentScrollerOptions(doc);
+  const pageScroller = createSmoothPageScroller(scrollerOptions);
+  const arrowScroller = createSmoothArrowScroller(scrollerOptions);
+
+  function stopAll() {
+    pageScroller.stop();
+    arrowScroller.stop();
+  }
 
   function handleKeyDown(event) {
+    const action = getScrollKeyAction(event);
+    if (!action) {
+      return;
+    }
     const scroller = findThreadScroller(doc);
-    if (!shouldHandlePageScroll(event, doc, scroller)) {
+    if (!shouldHandleScrollKey(event, doc, scroller, action)) {
       return;
     }
 
-    const direction = event.key === 'PageUp' ? -1 : 1;
+    const activeController = action.kind === 'page' ? pageScroller : arrowScroller;
+    const otherController = action.kind === 'page' ? arrowScroller : pageScroller;
+
     event.preventDefault();
     event.stopPropagation();
     if (typeof event.stopImmediatePropagation === 'function') {
       event.stopImmediatePropagation();
     }
-    if (!event.repeat || !pageScroller.isActive()) {
-      pageScroller.press(direction);
+    otherController.stop();
+    if (!event.repeat || !activeController.isActive()) {
+      activeController.press(action.direction);
     }
   }
 
   function handleKeyUp(event) {
-    if (event.key === 'PageUp') {
-      pageScroller.release(-1);
-    } else if (event.key === 'PageDown') {
-      pageScroller.release(1);
+    const action = getScrollKeyAction(event);
+    if (!action) {
+      return;
+    }
+    if (action.kind === 'page') {
+      pageScroller.release(action.direction);
+    } else {
+      arrowScroller.release(action.direction);
     }
   }
 
   function handleWindowBlur() {
-    pageScroller.stop();
+    stopAll();
   }
 
   function init() {
@@ -158,7 +211,7 @@ export function createPageScrollFeature({ doc = document } = {}) {
   }
 
   function destroy() {
-    pageScroller.stop();
+    stopAll();
     keyTarget.removeEventListener('keydown', handleKeyDown, true);
     keyTarget.removeEventListener('keyup', handleKeyUp, true);
     keyTarget.removeEventListener('blur', handleWindowBlur);

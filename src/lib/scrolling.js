@@ -4,6 +4,11 @@ export const PAGE_SPRING_OMEGA = 16;
 export const PAGE_HOLD_DELAY_SEC = 0.24;
 export const PAGE_HOLD_SPEED_PAGES_PER_SEC = 2.6;
 
+export const ARROW_SCROLL_STEP_PX = 80;
+export const ARROW_SPRING_OMEGA = 20;
+export const ARROW_HOLD_DELAY_SEC = 0.16;
+export const ARROW_HOLD_SPEED_PX_PER_SEC = 800;
+
 const MAX_FRAME_DT_SEC = 0.05;
 const DEFAULT_FIRST_FRAME_DT_SEC = 1 / 60;
 const SETTLE_POSITION_EPSILON_PX = 0.5;
@@ -306,5 +311,19 @@ export function createSmoothPageScroller(options = {}) {
     getHoldSpeedPxPerSec: (scroller) => computePageStep(scroller) * PAGE_HOLD_SPEED_PAGES_PER_SEC,
     holdDelaySec: PAGE_HOLD_DELAY_SEC,
     springOmega: PAGE_SPRING_OMEGA,
+  });
+}
+
+/**
+ * Drives continuous, frame-rate-independent smooth ArrowUp / ArrowDown scrolling
+ * via requestAnimationFrame using a critically damped spring.
+ */
+export function createSmoothArrowScroller(options = {}) {
+  return createSpringScroller({
+    ...options,
+    getStepPx: () => ARROW_SCROLL_STEP_PX,
+    getHoldSpeedPxPerSec: () => ARROW_HOLD_SPEED_PX_PER_SEC,
+    holdDelaySec: ARROW_HOLD_DELAY_SEC,
+    springOmega: ARROW_SPRING_OMEGA,
   });
 }

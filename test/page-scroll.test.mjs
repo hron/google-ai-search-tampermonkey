@@ -5,7 +5,7 @@ import {
   PAGE_SCROLL_FEATURE_ID,
   createPageScrollFeature,
 } from '../src/features/page-scroll.js';
-import { computePageStep } from '../src/lib/scrolling.js';
+import { ARROW_SCROLL_STEP_PX, computePageStep } from '../src/lib/scrolling.js';
 
 function createFakeElement(
   tag,
@@ -16,6 +16,8 @@ function createFakeElement(
     clientHeight = 800,
     scrollHeight = 800,
     overflowY = 'visible',
+    value = '',
+    textContent = '',
   } = {},
 ) {
   const children = [];
@@ -30,6 +32,8 @@ function createFakeElement(
     scrollTop,
     clientHeight,
     scrollHeight,
+    value,
+    textContent,
     _overflowY: overflowY,
     scrollCalls: [],
     classList: {
@@ -359,6 +363,7 @@ function createFakeAiSearchPageEnv({
     body,
     main,
     turnRoot,
+    inputPlate,
     scroller,
     input,
     otherTextarea,
@@ -523,5 +528,217 @@ describe('page-scroll feature (Google Search AI Mode)', () => {
 
     const ev = env.dispatchKey('keydown', { key: 'PageUp', target: env.input });
     assert.equal(ev.defaultPrevented, false);
+  });
+
+  it('smoothly scrolls document.scrollingElement on ArrowUp and ArrowDown while empty prompt textarea stays focused', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, clientHeight: 800, scrollHeight: 4000 });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    env.doc.activeElement = env.input;
+    env.input.value = '';
+
+    const upEv = env.dispatchKey('keydown', { key: 'ArrowUp', target: env.input });
+    env.dispatchKey('keyup', { key: 'ArrowUp', target: env.input });
+    assert.equal(upEv.defaultPrevented, true);
+    assert.equal(upEv.propagationStopped, true);
+    assert.equal(env.doc.activeElement, env.input, 'prompt textarea must stay focused');
+
+    env.advanceMs(66);
+    assert.ok(
+      env.scroller.scrollTop < 1500 - 10 && env.scroller.scrollTop > 1500 - ARROW_SCROLL_STEP_PX + 10,
+      `ArrowUp should animate smoothly, got ${env.scroller.scrollTop}`,
+    );
+
+    env.advanceMs(600);
+    assert.equal(env.scroller.scrollTop, 1500 - ARROW_SCROLL_STEP_PX);
+    assert.equal(env.frames.size, 0);
+
+    const downEv = env.dispatchKey('keydown', { key: 'ArrowDown', target: env.input });
+    env.dispatchKey('keyup', { key: 'ArrowDown', target: env.input });
+    assert.equal(downEv.defaultPrevented, true);
+    assert.equal(env.doc.activeElement, env.input);
+
+    env.advanceMs(600);
+    assert.equal(env.scroller.scrollTop, 1500);
+    assert.equal(env.frames.size, 0);
+
+    feature.destroy();
+  });
+
+  it('prefers internal aim-mars-turn-root overflow container for ArrowUp/ArrowDown', () => {
+    const env = createFakeAiSearchPageEnv({
+      initialScrollTop: 1200,
+      clientHeight: 700,
+      scrollHeight: 3500,
+      internalScroller: true,
+    });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    const ev = env.dispatchKey('keydown', { key: 'ArrowUp', target: env.input });
+    env.dispatchKey('keyup', { key: 'ArrowUp', target: env.input });
+    assert.equal(ev.defaultPrevented, true);
+
+    env.advanceMs(600);
+    assert.equal(env.turnRoot.scrollTop, 1200 - ARROW_SCROLL_STEP_PX);
+    assert.equal(env.html.scrollTop, 0);
+
+    feature.destroy();
+  });
+
+  it('scrolls continuously while holding ArrowDown in empty prompt textarea and stops cleanly on release or blur', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 500, clientHeight: 800, scrollHeight: 4000 });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    env.dispatchKey('keydown', { key: 'ArrowDown', target: env.input });
+    env.advanceMs(500);
+    const heldPos = env.scroller.scrollTop;
+    assert.ok(
+      heldPos > 500 + ARROW_SCROLL_STEP_PX * 2,
+      `holding ArrowDown should scroll continuously, got ${heldPos}`,
+    );
+
+    env.dispatchKey('keyup', { key: 'ArrowDown', target: env.input });
+    env.advanceMs(600);
+    assert.ok(env.scroller.scrollTop > heldPos, 'should coast slightly after ArrowDown release');
+    assert.equal(env.frames.size, 0);
+
+    // Window blur cancels an active arrow scroll
+    env.dispatchKey('keydown', { key: 'ArrowUp', target: env.input });
+    env.advanceMs(50);
+    assert.ok(env.frames.size > 0);
+    env.doc.defaultView.dispatchEvent({ type: 'blur' });
+    assert.equal(env.frames.size, 0);
+
+    feature.destroy();
+  });
+
+  it('does not hijack ArrowUp/ArrowDown when prompt textarea contains text (preserves text editing)', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 1200 });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    env.doc.activeElement = env.input;
+    env.input.value = 'line 1\nline 2';
+
+    const upEv = env.dispatchKey('keydown', { key: 'ArrowUp', target: env.input });
+    const downEv = env.dispatchKey('keydown', { key: 'ArrowDown', target: env.input });
+    assert.equal(upEv.defaultPrevented, false);
+    assert.equal(downEv.defaultPrevented, false);
+    assert.equal(env.frames.size, 0);
+    assert.equal(env.scroller.scrollTop, 1200);
+
+    // PageUp still works even when prompt has text
+    const pgEv = env.dispatchKey('keydown', { key: 'PageUp', target: env.input });
+    env.dispatchKey('keyup', { key: 'PageUp', target: env.input });
+    assert.equal(pgEv.defaultPrevented, true);
+    env.advanceMs(800);
+    assert.equal(env.scroller.scrollTop, 1200 - computePageStep(env.scroller));
+
+    feature.destroy();
+  });
+
+  it('supports empty contenteditable prompt input and ignores non-empty or aria-expanded prompt inputs', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 1200 });
+    const ceInput = createFakeElement('div', {
+      attrs: { contenteditable: 'true' },
+      textContent: '',
+    });
+    env.inputPlate.appendChild(ceInput);
+
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    env.doc.activeElement = ceInput;
+    const ev1 = env.dispatchKey('keydown', { key: 'ArrowUp', target: ceInput });
+    env.dispatchKey('keyup', { key: 'ArrowUp', target: ceInput });
+    assert.equal(ev1.defaultPrevented, true);
+    env.advanceMs(600);
+    assert.equal(env.scroller.scrollTop, 1200 - ARROW_SCROLL_STEP_PX);
+
+    ceInput.textContent = 'some draft text';
+    const ev2 = env.dispatchKey('keydown', { key: 'ArrowUp', target: ceInput });
+    assert.equal(ev2.defaultPrevented, false);
+
+    // aria-expanded="true" (e.g. open suggestion popup) must not be hijacked
+    env.doc.activeElement = env.input;
+    env.input.value = '';
+    env.input.setAttribute('aria-expanded', 'true');
+    const ev3 = env.dispatchKey('keydown', { key: 'ArrowDown', target: env.input });
+    assert.equal(ev3.defaultPrevented, false);
+
+    feature.destroy();
+  });
+
+  it('ignores ArrowUp/ArrowDown with modifiers, IME composition, outside prompt input, non-AI pages, or non-overflowing pages', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 1200 });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    // Modifiers & IME on prompt input
+    for (const mods of [
+      { shiftKey: true },
+      { ctrlKey: true },
+      { altKey: true },
+      { metaKey: true },
+      { isComposing: true },
+    ]) {
+      const ev = env.dispatchKey('keydown', { key: 'ArrowUp', target: env.input, ...mods });
+      assert.equal(ev.defaultPrevented, false);
+    }
+
+    // Outside prompt input (body, other textarea, dialog, sidebar, scrollable code block)
+    for (const el of [env.body, env.otherTextarea, env.dialogButton, env.sidebarButton, env.scrollableCode]) {
+      env.doc.activeElement = el;
+      const ev = env.dispatchKey('keydown', { key: 'ArrowDown', target: el });
+      assert.equal(ev.defaultPrevented, false, `should not hijack ArrowDown on ${el.tagName}`);
+    }
+
+    assert.equal(env.scroller.scrollTop, 1200);
+    feature.destroy();
+
+    // Regular Google Search page
+    const regularEnv = createFakeAiSearchPageEnv({
+      search: '?q=weather',
+      aiModeDom: false,
+      initialScrollTop: 1200,
+    });
+    const regularFeature = createPageScrollFeature({ doc: regularEnv.doc });
+    regularFeature.init();
+    const regEv = regularEnv.dispatchKey('keydown', { key: 'ArrowUp', target: regularEnv.input });
+    assert.equal(regEv.defaultPrevented, false);
+    regularFeature.destroy();
+
+    // Non-overflowing page
+    const flatEnv = createFakeAiSearchPageEnv({ initialScrollTop: 0, clientHeight: 800, scrollHeight: 800 });
+    const flatFeature = createPageScrollFeature({ doc: flatEnv.doc });
+    flatFeature.init();
+    const flatEv = flatEnv.dispatchKey('keydown', { key: 'ArrowDown', target: flatEnv.input });
+    assert.equal(flatEv.defaultPrevented, false);
+    flatFeature.destroy();
+  });
+
+  it('stops in-flight page scroll when ArrowUp/ArrowDown starts and vice versa', () => {
+    const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, clientHeight: 800, scrollHeight: 4000 });
+    const feature = createPageScrollFeature({ doc: env.doc });
+    feature.init();
+
+    env.dispatchKey('keydown', { key: 'PageUp', target: env.input });
+    env.dispatchKey('keyup', { key: 'PageUp', target: env.input });
+    env.advanceMs(66);
+    const midPageUp = env.scroller.scrollTop;
+    assert.ok(midPageUp < 1500);
+
+    // Immediately switch to ArrowDown: only 1 rAF loop should remain active and move down from midPageUp
+    env.dispatchKey('keydown', { key: 'ArrowDown', target: env.input });
+    env.dispatchKey('keyup', { key: 'ArrowDown', target: env.input });
+    assert.equal(env.frames.size, 1, 'only one scroll animation loop should run at a time');
+    env.advanceMs(600);
+    assert.equal(env.scroller.scrollTop, Math.round(midPageUp + ARROW_SCROLL_STEP_PX));
+    assert.equal(env.frames.size, 0);
+
+    feature.destroy();
   });
 });

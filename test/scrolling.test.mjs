@@ -2,9 +2,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  ARROW_SCROLL_STEP_PX,
   PAGE_SCROLL_RATIO,
   computePageStep,
   applyScrollAction,
+  createSmoothArrowScroller,
   createSmoothPageScroller,
 } from '../src/lib/scrolling.js';
 
@@ -56,72 +58,77 @@ describe('applyScrollAction', () => {
   });
 });
 
+function createSpringHarness(
+  createController,
+  { scrollTop = 1500, clientHeight = 800, scrollHeight = 6000, reducedMotion = false } = {},
+) {
+  let nowMs = 0;
+  let nextId = 1;
+  const frames = new Map();
+  const scrollCalls = [];
+
+  const scroller = {
+    scrollTop,
+    clientHeight,
+    scrollHeight,
+    scrollTo(opts) {
+      scrollCalls.push(['scrollTo', opts]);
+      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      scroller.scrollTop = Math.max(0, Math.min(max, opts.top));
+    },
+    scrollBy(opts) {
+      scrollCalls.push(['scrollBy', opts]);
+      const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      scroller.scrollTop = Math.max(0, Math.min(max, scroller.scrollTop + opts.top));
+    },
+  };
+
+  const requestFrame = (cb) => {
+    const id = nextId++;
+    frames.set(id, cb);
+    return id;
+  };
+
+  const cancelFrame = (id) => {
+    frames.delete(id);
+  };
+
+  const stepFrame = (dtMs = 16.6667) => {
+    nowMs += dtMs;
+    const pending = Array.from(frames.entries());
+    frames.clear();
+    for (const [, cb] of pending) {
+      cb(nowMs);
+    }
+  };
+
+  const advanceMs = (totalMs, stepMs = 16.6667) => {
+    const steps = Math.round(totalMs / stepMs);
+    for (let i = 0; i < steps; i += 1) {
+      if (frames.size === 0) break;
+      stepFrame(stepMs);
+    }
+  };
+
+  const controller = createController({
+    getScroller: () => scroller,
+    requestFrame,
+    cancelFrame,
+    prefersReducedMotion: () => reducedMotion,
+  });
+
+  return {
+    scroller,
+    scrollCalls,
+    frames,
+    stepFrame,
+    advanceMs,
+    controller,
+  };
+}
+
 describe('createSmoothPageScroller', () => {
-  function createHarness({ scrollTop = 1500, clientHeight = 800, scrollHeight = 6000, reducedMotion = false } = {}) {
-    let nowMs = 0;
-    let nextId = 1;
-    const frames = new Map();
-    const scrollCalls = [];
-
-    const scroller = {
-      scrollTop,
-      clientHeight,
-      scrollHeight,
-      scrollTo(opts) {
-        scrollCalls.push(['scrollTo', opts]);
-        const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-        scroller.scrollTop = Math.max(0, Math.min(max, opts.top));
-      },
-      scrollBy(opts) {
-        scrollCalls.push(['scrollBy', opts]);
-        const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-        scroller.scrollTop = Math.max(0, Math.min(max, scroller.scrollTop + opts.top));
-      },
-    };
-
-    const requestFrame = (cb) => {
-      const id = nextId++;
-      frames.set(id, cb);
-      return id;
-    };
-
-    const cancelFrame = (id) => {
-      frames.delete(id);
-    };
-
-    const stepFrame = (dtMs = 16.6667) => {
-      nowMs += dtMs;
-      const pending = Array.from(frames.entries());
-      frames.clear();
-      for (const [, cb] of pending) {
-        cb(nowMs);
-      }
-    };
-
-    const advanceMs = (totalMs, stepMs = 16.6667) => {
-      const steps = Math.round(totalMs / stepMs);
-      for (let i = 0; i < steps; i += 1) {
-        if (frames.size === 0) break;
-        stepFrame(stepMs);
-      }
-    };
-
-    const controller = createSmoothPageScroller({
-      getScroller: () => scroller,
-      requestFrame,
-      cancelFrame,
-      prefersReducedMotion: () => reducedMotion,
-    });
-
-    return {
-      scroller,
-      scrollCalls,
-      frames,
-      stepFrame,
-      advanceMs,
-      controller,
-    };
-  }
+  const createHarness = (opts) => createSpringHarness(createSmoothPageScroller, opts);
 
   it('smoothly glides one page on a quick tap without overshoot and stops', () => {
     const h = createHarness({ scrollTop: 1500, clientHeight: 800, scrollHeight: 6000 });
@@ -254,5 +261,108 @@ describe('createSmoothPageScroller', () => {
     reduced.controller.press(1);
     assert.equal(reduced.frames.size, 0);
     assert.deepEqual(reduced.scrollCalls, [['scrollBy', { top: 680, behavior: 'instant' }]]);
+  });
+});
+
+describe('createSmoothArrowScroller', () => {
+  const createHarness = (opts) => createSpringHarness(createSmoothArrowScroller, opts);
+
+  it('smoothly glides one arrow step on a quick tap without overshoot and stops', () => {
+    const h = createHarness({ scrollTop: 1500, clientHeight: 800, scrollHeight: 6000 });
+
+    h.controller.press(-1);
+    h.advanceMs(50);
+    h.controller.release(-1);
+    h.advanceMs(33);
+    const mid = h.scroller.scrollTop;
+    assert.ok(
+      mid < 1500 - 10 && mid > 1500 - ARROW_SCROLL_STEP_PX + 10,
+      `expected smooth mid-flight scrollTop, got ${mid}`,
+    );
+
+    h.advanceMs(600);
+    assert.equal(h.scroller.scrollTop, 1500 - ARROW_SCROLL_STEP_PX);
+    assert.equal(h.frames.size, 0, 'should settle cleanly after release');
+  });
+
+  it('accumulates rapid arrow taps smoothly without losing distance', () => {
+    const h = createHarness({ scrollTop: 1000, clientHeight: 800, scrollHeight: 6000 });
+
+    for (let i = 0; i < 3; i += 1) {
+      h.controller.press(1);
+      h.advanceMs(33);
+      h.controller.release(1);
+      h.advanceMs(33);
+    }
+
+    h.advanceMs(700);
+    assert.equal(h.scroller.scrollTop, 1000 + 3 * ARROW_SCROLL_STEP_PX);
+    assert.equal(h.frames.size, 0);
+  });
+
+  it('scrolls continuously and smoothly while held and coasts to stop on release', () => {
+    const h = createHarness({ scrollTop: 500, clientHeight: 800, scrollHeight: 6000 });
+
+    h.controller.press(1);
+
+    const deltas = [];
+    let prev = h.scroller.scrollTop;
+    for (let i = 0; i < 42; i += 1) {
+      h.stepFrame(16.6667);
+      deltas.push(h.scroller.scrollTop - prev);
+      prev = h.scroller.scrollTop;
+    }
+
+    assert.ok(deltas.every((d) => d > 0), 'every frame while held should advance smoothly');
+    assert.ok(
+      h.scroller.scrollTop > 500 + ARROW_SCROLL_STEP_PX * 3,
+      `expected continuous held arrow scrolling past ${500 + ARROW_SCROLL_STEP_PX * 3}, got ${h.scroller.scrollTop}`,
+    );
+
+    const atRelease = h.scroller.scrollTop;
+    h.controller.release(1);
+    h.advanceMs(600);
+    assert.ok(h.scroller.scrollTop > atRelease + 10, 'should smoothly coast after release');
+    assert.equal(h.frames.size, 0);
+  });
+
+  it('clamps cleanly at top and bottom bounds without scheduling wasted frames', () => {
+    const h = createHarness({ scrollTop: 0, clientHeight: 800, scrollHeight: 2000 });
+    h.controller.press(-1);
+    assert.equal(h.frames.size, 0, 'no animation needed when already at top');
+    assert.equal(h.scroller.scrollTop, 0);
+
+    h.scroller.scrollTop = 1170;
+    h.controller.press(1);
+    h.advanceMs(50);
+    h.controller.release(1);
+    h.advanceMs(600);
+    assert.equal(h.scroller.scrollTop, 1200);
+    assert.equal(h.frames.size, 0);
+  });
+
+  it('falls back to smooth scrollBy when requestAnimationFrame is unavailable, and instant when reduced motion is preferred', () => {
+    const calls = [];
+    const scroller = {
+      scrollTop: 1000,
+      clientHeight: 800,
+      scrollHeight: 3000,
+      scrollBy(opts) {
+        calls.push(opts);
+      },
+    };
+
+    const fallbackController = createSmoothArrowScroller({
+      getScroller: () => scroller,
+      requestFrame: null,
+      cancelFrame: null,
+    });
+    fallbackController.press(-1);
+    assert.deepEqual(calls, [{ top: -ARROW_SCROLL_STEP_PX, behavior: 'smooth' }]);
+
+    const reduced = createHarness({ scrollTop: 1500, reducedMotion: true });
+    reduced.controller.press(1);
+    assert.equal(reduced.frames.size, 0);
+    assert.deepEqual(reduced.scrollCalls, [['scrollBy', { top: ARROW_SCROLL_STEP_PX, behavior: 'instant' }]]);
   });
 });

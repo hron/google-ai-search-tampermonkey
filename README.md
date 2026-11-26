@@ -15,13 +15,14 @@ Adds a command-palette workflow for Google AI Mode's `"Search threads"` sidebar 
 - **`Escape`**: exits thread search (and collapses the sidebar if opened via `Ctrl+K`) and returns focus to the `"Ask anything"` prompt input.
 - Mouse hover stays in sync with keyboard selection without stationary cursors stealing focus during scrolling, and infinite scroll preserves your current selection.
 
-### Smooth `PageUp` / `PageDown` scrolling while input is focused
+### Smooth `PageUp` / `PageDown` & `ArrowUp` / `ArrowDown` scrolling while input is focused
 Scroll the AI Mode conversation smoothly without leaving the `"Ask anything"` prompt textarea:
 
 - Press **`PageUp`** / **`PageDown`** while focused in the prompt input (or anywhere in the main conversation) to smoothly scroll the thread by a page while keeping focus in the prompt box.
+- Press **`ArrowUp`** / **`ArrowDown`** while focused in an empty prompt input to smoothly scroll the output line-by-line (as soon as you type text into the prompt box, `ArrowUp` / `ArrowDown` fall back to native text cursor navigation).
 - Works with both document-level scrolling (`document.scrollingElement`) and internal overflow containers (`aim-mars-turn-root` / zero-state `[role="main"]`).
-- Rapid taps accumulate smoothly without losing distance, and holding **`PageUp`** / **`PageDown`** transitions into continuous smooth scrolling that coasts to a stop on release.
-- Modifier combos like **`Shift+PageUp`** / **`Shift+PageDown`** (text selection) and **`Ctrl+PageUp`** / **`Ctrl+PageDown`** (tab switching), as well as dialogs, menus, sidebar scrolling, and other editable fields, are left untouched.
+- Rapid taps accumulate smoothly without losing distance, and holding **`PageUp`** / **`PageDown`** or **`ArrowUp`** / **`ArrowDown`** transitions into continuous smooth scrolling that coasts to a stop on release.
+- Modifier combos like **`Shift+PageUp`** / **`Shift+PageDown`** / **`Shift+ArrowUp`** (text selection) and **`Ctrl+PageUp`** / **`Ctrl+PageDown`** (tab switching), as well as dialogs, menus, sidebar scrolling, and other editable fields, are left untouched.
 
 ### Vimium-friendly citation chips & full-height links popover
 Inline source chips (e.g. `Google Antigravity +3`) are an empty overlay link stacked above the real "related results" button. Vimium hints the overlay and its synthetic click used to open the first source in a new tab immediately. The script redirects only synthetic (non-trusted) clicks on the overlay to the button, so Vimium opens the list of sources while real mouse clicks remain untouched. It also expands the "Related links" popover to full height (up to the viewport height, clamping its vertical position inside the viewport) so all sources are visible without awkward keyboard scrolling.
@@ -85,7 +86,7 @@ git push origin main --follow-tags
 - `src/meta.js` — Tampermonkey metadata header generator (reads version from `package.json`).
 - `src/lib/dom.js` — Google AI Mode detection, DOM selectors, and helpers.
 - `src/lib/scrolling.js` — Pure spring-based smooth scrolling calculations.
-- `src/features/page-scroll.js` — Smooth `PageUp` / `PageDown` scrolling while the prompt input is focused.
+- `src/features/page-scroll.js` — Smooth `PageUp` / `PageDown` and `ArrowUp` / `ArrowDown` scrolling while the prompt input is focused.
 - `src/features/search-threads.js` — Keyboard-first `Ctrl+K` thread search & sidebar navigation.
 - `src/features/citation-chips.js` — Redirects synthetic (Vimium) clicks on citation chip overlay links to the chip button.
 - `src/main.js` — Feature bootstrapper.

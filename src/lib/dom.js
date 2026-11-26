@@ -42,11 +42,15 @@ export function findPromptInput(doc = document) {
   return doc.querySelector(PROMPT_INPUT_SELECTOR);
 }
 
-export function isPromptInputElement(node) {
-  if (!node) return false;
+export function resolvePromptInputElement(node) {
+  if (!node) return null;
   const el = typeof node.closest === 'function' ? node : node.parentElement;
-  if (!el || typeof el.closest !== 'function') return false;
-  return Boolean(el.closest(PROMPT_INPUT_SELECTOR));
+  if (!el || typeof el.closest !== 'function') return null;
+  return el.closest(PROMPT_INPUT_SELECTOR);
+}
+
+export function isPromptInputElement(node) {
+  return Boolean(resolvePromptInputElement(node));
 }
 
 export function focusElement(el, doc = document, { select = false } = {}) {

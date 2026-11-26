@@ -1,9 +1,10 @@
 import {
-  SIDEBAR_SELECTOR,
   findPromptInput,
+  findSidebarElement,
   focusElement,
   injectStyles,
   isAiModePage,
+  isInsideSidebarElement,
   toPageOptions,
 } from '../lib/dom.js';
 
@@ -16,7 +17,10 @@ const PENDING_OPEN_TIMEOUT_MS = 2500;
 const RESTORE_FOCUS_WINDOW_MS = 800;
 
 const SEARCH_INPUT_SELECTOR =
-  'input.LudIE, .uTGOrc input:not([type="hidden"]), input[type="search"], input[placeholder*="Search" i]:not([type="hidden"]), input[type="text"]:not([type="hidden"])';
+  'input[type="search"], input[placeholder*="Search" i]:not([type="hidden"]), input[type="text"]:not([type="hidden"])';
+
+const OPEN_SIDEBAR_BUTTON_SELECTOR =
+  'button[aria-label="Open sidebar"]:not([disabled]), button[jsname="JIu0P"]:not([disabled]), button.ONx74b:not([disabled])';
 
 const SEARCH_THREAD_OPTION_SELECTOR =
   '[data-xid="threads-list-root"] button[data-thread-id]:not([disabled]), [data-xid="aim-threads-view"] button[data-thread-id]:not([disabled]), [role="list"] [role="listitem"] button[data-thread-id]:not([disabled]), [role="listbox"] [role="option"]';
@@ -86,57 +90,105 @@ function isSearchElementHidden(el, stopAt) {
 }
 
 function findSidebarContainer(doc = document) {
-  if (!doc || typeof doc.querySelector !== 'function') return null;
-  const sidebar = doc.querySelector(SIDEBAR_SELECTOR);
+  const sidebar = findSidebarElement(doc);
   if (!sidebar || isSearchElementHidden(sidebar, sidebar)) return null;
   return sidebar;
 }
 
 function findOpenSidebarButton(doc = document) {
   if (!doc || typeof doc.querySelector !== 'function') return null;
+  return doc.querySelector(OPEN_SIDEBAR_BUTTON_SELECTOR) || null;
+}
+
+function isInsideThreadList(el) {
+  return Boolean(
+    el &&
+      typeof el.closest === 'function' &&
+      el.closest('[data-xid="threads-list-root"], [data-xid="aim-threads-view"], [role="list"]'),
+  );
+}
+
+function findSearchInputInContainer(container) {
+  if (!container || typeof container.querySelector !== 'function') return null;
+  const direct = container.querySelector(SEARCH_INPUT_SELECTOR);
+  if (direct) return direct;
+  if (typeof container.querySelectorAll !== 'function') return null;
   return (
-    doc.querySelector('button[jsname="JIu0P"]:not([disabled])') ||
-    doc.querySelector('button[aria-label="Open sidebar"]:not([disabled])') ||
-    doc.querySelector('button.ONx74b:not([disabled])') ||
-    null
+    Array.from(container.querySelectorAll('input')).find((el) => {
+      const type = (el.getAttribute?.('type') || 'text').toLowerCase();
+      return type === 'text' || type === 'search';
+    }) || null
   );
 }
 
 function findCloseSidebarButton(sidebar) {
   if (!sidebar || typeof sidebar.querySelector !== 'function') return null;
-  return (
-    sidebar.querySelector('button[aria-label="Close sidebar"]:not([disabled])') ||
-    sidebar.querySelector('button.OxKcRe:not([disabled])') ||
-    null
-  );
+  const byAria = sidebar.querySelector('button[aria-label="Close sidebar"]:not([disabled])');
+  if (byAria) return byAria;
+
+  // Structural fallback (locale-independent): first enabled icon/aria-labeled
+  // button in the sidebar header outside the thread list and search input bar.
+  if (typeof sidebar.querySelectorAll === 'function') {
+    const searchInput = findSearchInputInContainer(sidebar);
+    const searchBar = searchInput?.parentElement || null;
+    for (const btn of sidebar.querySelectorAll('button[aria-label]:not([disabled])')) {
+      if (btn.getAttribute?.('data-thread-id')) continue;
+      if (isInsideThreadList(btn)) continue;
+      if (searchBar && searchBar.contains?.(btn)) continue;
+      return btn;
+    }
+  }
+
+  return sidebar.querySelector('button.OxKcRe:not([disabled])') || null;
 }
 
 function findSearchThreadsTriggerButton(sidebar) {
   if (!sidebar || typeof sidebar.querySelector !== 'function') return null;
 
-  const byAction = sidebar.querySelector('button[jsaction*="MR4M8b"]:not([disabled])');
-  if (byAction) return byAction;
+  const byAria = sidebar.querySelector('button[aria-label*="Search" i]:not([disabled])');
+  if (byAria && !isInsideThreadList(byAria)) return byAria;
 
   if (typeof sidebar.querySelectorAll === 'function') {
-    const actionBarButtons = Array.from(sidebar.querySelectorAll('button.L9tyXb:not([disabled])'));
-    const byText = actionBarButtons.find((btn) => /search/i.test(btn.textContent || ''));
+    const headerButtons = Array.from(sidebar.querySelectorAll('button:not([disabled])')).filter(
+      (btn) => !btn.getAttribute?.('data-thread-id') && !isInsideThreadList(btn),
+    );
+    const byText = headerButtons.find((btn) => /search/i.test(btn.textContent || ''));
     if (byText) return byText;
-    // In Google AI Mode's sidebar action bar, New thread is 1st and Search threads is 2nd
+
+    const byAction = sidebar.querySelector('button[jsaction*="MR4M8b"]:not([disabled])');
+    if (byAction) return byAction;
+
+    // Locale-independent structural fallback: in the sidebar action bar,
+    // "New thread" is 1st and "Search threads" is 2nd (both have text labels,
+    // unlike the icon-only Close sidebar button which uses aria-label).
+    const actionBarButtons = headerButtons.filter(
+      (btn) => (btn.textContent || '').trim().length > 0 && !btn.getAttribute?.('aria-label'),
+    );
     if (actionBarButtons.length >= 2) {
       return actionBarButtons[1];
     }
   }
 
-  return sidebar.querySelector('button[aria-label*="Search" i]:not([disabled])') || null;
+  return sidebar.querySelector('button[jsaction*="MR4M8b"]:not([disabled])') || null;
 }
 
 function findExitSearchButton(container) {
   if (!container || typeof container.querySelector !== 'function') return null;
-  return (
-    container.querySelector('button[aria-label="Exit search"]:not([disabled])') ||
-    container.querySelector('.uTGOrc button.Amkkpc:not([disabled])') ||
-    null
-  );
+  const byAria = container.querySelector('button[aria-label="Exit search"]:not([disabled])');
+  if (byAria) return byAria;
+
+  // Structural fallback (locale-independent): the Exit search button sits
+  // inside the same search bar container directly before the search <input>.
+  const input = findSearchInputInContainer(container);
+  const searchBar = input?.parentElement || null;
+  if (searchBar && typeof searchBar.querySelectorAll === 'function') {
+    const buttons = Array.from(searchBar.querySelectorAll('button:not([disabled])'));
+    if (buttons.length > 0) {
+      return buttons[0];
+    }
+  }
+
+  return null;
 }
 
 export function findSearchThreadsUI(doc = document) {
@@ -144,7 +196,7 @@ export function findSearchThreadsUI(doc = document) {
 
   const sidebar = findSidebarContainer(doc);
   if (sidebar) {
-    const input = sidebar.querySelector(SEARCH_INPUT_SELECTOR);
+    const input = findSearchInputInContainer(sidebar);
     if (input && !isSearchElementHidden(input, sidebar)) {
       return { container: sidebar, input, isSidebar: true };
     }
@@ -192,7 +244,12 @@ export function findSearchThreadOptions(container, input = null) {
 
 function findActiveRowElement(option) {
   if (!option || typeof option.closest !== 'function') return null;
-  return option.closest('.u987h') || option.closest('[role="listitem"]') || null;
+  const listItem = option.closest('[role="listitem"]');
+  const parent = option.parentElement;
+  if (parent && listItem && parent !== listItem && listItem.contains?.(parent)) {
+    return parent;
+  }
+  return listItem || null;
 }
 
 export function computeNextOptionIndex(currentIndex, count, delta, { wrap = true } = {}) {
@@ -209,25 +266,27 @@ export function computeNextOptionIndex(currentIndex, count, delta, { wrap = true
   return Math.max(0, Math.min(count - 1, next));
 }
 
+function isScrollableOverflowY(el) {
+  const view = el?.ownerDocument?.defaultView;
+  let overflowY = null;
+  try {
+    overflowY = view?.getComputedStyle?.(el)?.overflowY || null;
+  } catch {
+    overflowY = null;
+  }
+  return overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+}
+
 function findSearchScrollViewport(option, container) {
   let cur = option?.parentElement || null;
   while (cur && cur !== container) {
     if (
       typeof cur.scrollHeight === 'number' &&
       typeof cur.clientHeight === 'number' &&
-      cur.scrollHeight > cur.clientHeight + 1
+      cur.scrollHeight > cur.clientHeight + 1 &&
+      isScrollableOverflowY(cur)
     ) {
-      if (cur.classList?.contains?.('cIl10d')) return cur;
-      const view = cur.ownerDocument?.defaultView;
-      let overflowY = null;
-      try {
-        overflowY = view?.getComputedStyle?.(cur)?.overflowY || null;
-      } catch {
-        overflowY = null;
-      }
-      if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
-        return cur;
-      }
+      return cur;
     }
     cur = cur.parentElement;
   }
@@ -324,10 +383,8 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
 
   function isSidebarFocusStealTarget(el) {
     if (!el || typeof el.closest !== 'function') return false;
-    if (el.closest(SIDEBAR_SELECTOR)) return true;
-    return Boolean(
-      el.closest('button[jsname="JIu0P"], button[aria-label="Open sidebar"], button.ONx74b'),
-    );
+    if (isInsideSidebarElement(el)) return true;
+    return Boolean(el.closest(OPEN_SIDEBAR_BUTTON_SELECTOR));
   }
 
   function focusPromptIfNeeded() {
@@ -745,7 +802,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
     if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       return false;
     }
-    if (el.classList?.contains?.('cIl10d') || el.classList?.contains?.('XOpo9c')) return true;
+    if (isScrollableOverflowY(el)) return true;
     return typeof el.getAttribute === 'function' && el.getAttribute('tabindex') === '0';
   }
 

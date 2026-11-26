@@ -1,17 +1,15 @@
 import { injectStyles, isAiModePage, toPageOptions } from '../lib/dom.js';
 
 export const CITATION_CHIPS_FEATURE_ID = 'citation-chips';
+export const RELATED_LINKS_DIALOG_ATTR = 'data-gaism-related-links-dialog';
 
-const CHIP_OVERLAY_LINK_SELECTOR = 'a.PMDqCb, a.rA9BFb';
 const CHIP_BUTTON_SELECTOR = 'button[data-amic="true"]';
-const RELATED_LINKS_DIALOG_SELECTOR = '[role="dialog"].jR6h';
+const DIALOG_SELECTOR = '[role="dialog"]';
 const DIALOG_VIEWPORT_MARGIN_PX = 16;
 const SYNTHETIC_POINTER_EVENTS = ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
 
 export const CITATION_CHIPS_STYLES = `
-${RELATED_LINKS_DIALOG_SELECTOR},
-${RELATED_LINKS_DIALOG_SELECTOR}.WaKIwf,
-${RELATED_LINKS_DIALOG_SELECTOR}.WaKIwf.ganmlc {
+${DIALOG_SELECTOR}[${RELATED_LINKS_DIALOG_ATTR}="true"] {
   max-block-size: calc(100vh - ${DIALOG_VIEWPORT_MARGIN_PX * 2}px) !important;
   max-height: calc(100vh - ${DIALOG_VIEWPORT_MARGIN_PX * 2}px) !important;
 }
@@ -23,6 +21,37 @@ function resolveNode(node) {
   return node.parentElement && typeof node.parentElement.closest === 'function'
     ? node.parentElement
     : null;
+}
+
+function findChipOverlayButton(anchor) {
+  const parent = anchor?.parentElement;
+  if (!parent || typeof parent.querySelector !== 'function') return null;
+  const button = parent.querySelector(CHIP_BUTTON_SELECTOR);
+  if (!button || typeof button.click !== 'function') return null;
+
+  const isDirectSibling =
+    (button.parentElement && button.parentElement === parent) ||
+    (parent.children && Array.from(parent.children).includes(button));
+  if (isDirectSibling) return button;
+
+  // Fallback when button is nested one level deeper inside the chip wrapper (or
+  // in lightweight mocks without parentElement on button): only treat empty
+  // links with no child elements as overlay links so prose/image links sharing
+  // a paragraph with a chip are never hijacked.
+  const isEmptyOverlay =
+    (anchor.textContent || '').trim().length === 0 &&
+    (!anchor.children || anchor.children.length === 0);
+  return isEmptyOverlay ? button : null;
+}
+
+function isRelatedLinksDialog(dialog) {
+  if (!dialog) return false;
+  if (dialog.getAttribute?.('aria-modal') === 'true') return false;
+  if (dialog.querySelector?.('input, textarea')) return false;
+  if (dialog.getAttribute?.(RELATED_LINKS_DIALOG_ATTR) === 'true') return true;
+  const ariaLabel = dialog.getAttribute?.('aria-label') || '';
+  if (/related\s+links/i.test(ariaLabel)) return true;
+  return Boolean(dialog.querySelector?.('a[href][target="_blank"], a[href^="http"]'));
 }
 
 export function computeClampedDialogTop(rect, viewportHeight, margin = DIALOG_VIEWPORT_MARGIN_PX) {
@@ -47,9 +76,10 @@ export function computeClampedDialogTop(rect, viewportHeight, margin = DIALOG_VI
  *    it a synthetic click, which opens the first source in a new tab instead of
  *    showing the list. Redirect only synthetic (untrusted) clicks on the
  *    overlay to the button; real clicks keep their original behavior.
- * 2. Expand the "Related links" popover (.jR6h) from Google's tiny 290px/145px
- *    cap to full height (up to the viewport height) and clamp its `top` offset
- *    so the entire list stays visible without awkward keyboard scrolling.
+ * 2. Expand the "Related links" popover ([role="dialog"]) from Google's tiny
+ *    290px/145px cap to full height (up to the viewport height) and clamp its
+ *    `top` offset so the entire list stays visible without awkward keyboard
+ *    scrolling.
  */
 export function createCitationChipsFeature({ doc = document, observe = true } = {}) {
   const view = doc.defaultView || null;
@@ -72,9 +102,13 @@ export function createCitationChipsFeature({ doc = document, observe = true } = 
     const viewportHeight = view?.innerHeight || doc.documentElement?.clientHeight || 0;
     if (viewportHeight <= 0) return;
 
-    const dialogs = doc.querySelectorAll(RELATED_LINKS_DIALOG_SELECTOR);
+    const dialogs = doc.querySelectorAll(DIALOG_SELECTOR);
     for (const dialog of dialogs) {
-      if (!dialog || typeof dialog.getBoundingClientRect !== 'function' || !dialog.style) continue;
+      if (!isRelatedLinksDialog(dialog)) continue;
+      if (typeof dialog.setAttribute === 'function') {
+        dialog.setAttribute(RELATED_LINKS_DIALOG_ATTR, 'true');
+      }
+      if (typeof dialog.getBoundingClientRect !== 'function' || !dialog.style) continue;
       const rect = dialog.getBoundingClientRect();
       const clampedTop = computeClampedDialogTop(rect, viewportHeight, DIALOG_VIEWPORT_MARGIN_PX);
       if (clampedTop !== null) {
@@ -102,10 +136,12 @@ export function createCitationChipsFeature({ doc = document, observe = true } = 
   function findChipButtonForEvent(event) {
     const el = resolveNode(event?.target);
     if (!el) return null;
-    const overlay = el.closest(CHIP_OVERLAY_LINK_SELECTOR);
-    if (overlay) {
-      const button = overlay.parentElement?.querySelector?.(CHIP_BUTTON_SELECTOR);
-      return button && typeof button.click === 'function' ? { button, viaOverlay: true } : null;
+    const anchor = el.closest('a');
+    if (anchor) {
+      const button = findChipOverlayButton(anchor);
+      if (button) {
+        return { button, viaOverlay: true };
+      }
     }
     const button = el.closest(CHIP_BUTTON_SELECTOR);
     if (button && typeof button.click === 'function') {

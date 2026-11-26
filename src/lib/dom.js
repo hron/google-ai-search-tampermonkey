@@ -1,14 +1,47 @@
 export const AI_MODE_MARKER_SELECTOR =
-  'div[data-xid="aim-mars-input-plate"], div[data-xid="aim-zero-state-input-plate"], div[data-xid="aim-mars-turn-root"], div[data-xid="aim-zero-state"], [data-xid="BVEPif"][role="navigation"]';
+  'div[data-xid="aim-mars-input-plate"], div[data-xid="aim-zero-state-input-plate"], div[data-xid="aim-mars-turn-root"], div[data-xid="aim-zero-state"], [role="navigation"][aria-label="AI Mode history"], nav[aria-label="AI Mode history"], [data-xid="BVEPif"][role="navigation"]';
 
 export const PROMPT_INPUT_SELECTOR =
-  'div[data-xid$="-input-plate"] textarea, div[data-xid$="-input-plate"] [contenteditable="true"], textarea.ITIRGe, textarea[aria-label="Ask anything"]';
+  'div[data-xid$="-input-plate"] textarea, div[data-xid$="-input-plate"] [contenteditable="true"], textarea[aria-label="Ask anything"], textarea.ITIRGe';
 
 export const SIDEBAR_SELECTOR =
-  '[role="navigation"][data-xid="BVEPif"], [role="navigation"][aria-label="AI Mode history"], nav[aria-label="AI Mode history"]';
+  '[role="navigation"][aria-label="AI Mode history"], nav[aria-label="AI Mode history"], [role="navigation"][data-xid="BVEPif"]';
+
+const SIDEBAR_CONTENT_MARKER_SELECTOR =
+  '[data-xid="threads-list-root"], [data-xid="aim-threads-view"]';
 
 // User prompt bubbles inside the AI Mode conversation thread
 export const USER_PROMPT_SELECTOR = '.ilZyRc.R7mRQb, .Ax52xb';
+
+export function isSidebarElement(el) {
+  if (!el) return false;
+  if (typeof el.matches === 'function' && el.matches(SIDEBAR_SELECTOR)) return true;
+  const isNav =
+    el.tagName === 'NAV' ||
+    (typeof el.getAttribute === 'function' && el.getAttribute('role') === 'navigation');
+  if (!isNav) return false;
+  return Boolean(
+    typeof el.querySelector === 'function' && el.querySelector(SIDEBAR_CONTENT_MARKER_SELECTOR),
+  );
+}
+
+export function findSidebarElement(doc = document) {
+  if (!doc || typeof doc.querySelector !== 'function') return null;
+  const direct = doc.querySelector(SIDEBAR_SELECTOR);
+  if (direct) return direct;
+  if (typeof doc.querySelectorAll !== 'function') return null;
+  for (const nav of doc.querySelectorAll('[role="navigation"], nav')) {
+    if (isSidebarElement(nav)) return nav;
+  }
+  return null;
+}
+
+export function isInsideSidebarElement(el) {
+  if (!el || typeof el.closest !== 'function') return false;
+  if (el.closest(SIDEBAR_SELECTOR)) return true;
+  const nav = el.closest('[role="navigation"], nav');
+  return Boolean(nav && isSidebarElement(nav));
+}
 
 export function toPageOptions(obj, doc = document) {
   const view = doc?.defaultView;

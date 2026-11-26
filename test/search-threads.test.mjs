@@ -245,7 +245,8 @@ function matchesSimple(el, token) {
 }
 
 function matchesCompoundDescendant(el, selector) {
-  const parts = selector.trim().split(/\s+/);
+  const parts = selector.trim().match(/(?:\[[^\]]*\]|[^\s\[])+/g) || [];
+  if (parts.length === 0) return false;
   if (!matchesSimple(el, parts[parts.length - 1])) return false;
   let cur = el.parentElement;
   for (let i = parts.length - 2; i >= 0; i -= 1) {
@@ -306,7 +307,9 @@ function createFakeAiSearchEnv({
   rowHeight = 52,
   viewportHeight = 156,
   locale = 'en',
+  scrambleObfuscated = false,
 } = {}) {
+  const cls = (names) => (scrambleObfuscated ? names.map((_, i) => `rnd_${i}_${Math.random().toString(36).slice(2, 6)}`) : names);
   const winListeners = new Map();
   const docListeners = new Map();
 
@@ -322,7 +325,7 @@ function createFakeAiSearchEnv({
     classes: ['UAbVe'],
   });
   const promptInput = createFakeNode('textarea', {
-    classes: aiModeDom ? ['ITIRGe'] : ['gLFyf'],
+    classes: aiModeDom ? cls(['ITIRGe']) : ['gLFyf'],
     attrs: aiModeDom ? { 'aria-label': 'Ask anything', placeholder: 'Ask anything' } : { name: 'q' },
   });
   inputPlate.appendChild(promptInput);
@@ -330,13 +333,16 @@ function createFakeAiSearchEnv({
   body.appendChild(main);
 
   const rail = createFakeNode('div', { classes: ['rail'] });
+  const openSidebarAttrs = {
+    'aria-label': locale === 'en' ? 'Open sidebar' : 'Открыть боковую панель',
+    jsaction: scrambleObfuscated ? 'click:scrambled' : 'click:&KJJZid_b|Mrjwi',
+  };
+  if (!scrambleObfuscated || locale !== 'en') {
+    openSidebarAttrs.jsname = 'JIu0P';
+  }
   const openSidebarBtn = createFakeNode('button', {
-    classes: ['ONx74b'],
-    attrs: {
-      jsname: 'JIu0P',
-      'aria-label': locale === 'en' ? 'Open sidebar' : 'Открыть боковую панель',
-      jsaction: 'click:&KJJZid_b|Mrjwi',
-    },
+    classes: cls(['ONx74b']),
+    attrs: openSidebarAttrs,
   });
   if (aiModeDom) {
     rail.appendChild(openSidebarBtn);
@@ -421,17 +427,17 @@ function createFakeAiSearchEnv({
     body.classList.add('K9MSg');
 
     const nav = createFakeNode('div', {
-      classes: ['ho072b', 'j2vKLc'],
+      classes: cls(['ho072b', 'j2vKLc']),
       attrs: {
         role: 'navigation',
-        'data-xid': 'BVEPif',
+        'data-xid': scrambleObfuscated ? 'SCRAMBLED' : 'BVEPif',
         'aria-label': locale === 'en' ? 'AI Mode history' : 'История режима ИИ',
         tabindex: '-1',
       },
     });
 
     const closeSidebarBtn = createFakeNode('button', {
-      classes: ['OxKcRe'],
+      classes: cls(['OxKcRe']),
       attrs: {
         'aria-label': locale === 'en' ? 'Close sidebar' : 'Закрыть боковую панель',
       },
@@ -443,14 +449,14 @@ function createFakeAiSearchEnv({
     nav.appendChild(headerSlot);
 
     const outerScroll = createFakeNode('div', {
-      classes: ['XOpo9c'],
+      classes: cls(['XOpo9c']),
       scrollTop: 0,
       clientHeight: viewportHeight + 60,
       scrollHeight: viewportHeight + 60,
       overflowY: 'auto',
     });
     const viewport = createFakeNode('div', {
-      classes: ['cIl10d'],
+      classes: cls(['cIl10d']),
       scrollTop: 0,
       clientHeight: viewportHeight,
       scrollHeight: viewportHeight,
@@ -513,9 +519,9 @@ function createFakeAiSearchEnv({
         });
         const dh = createFakeNode('div', { classes: ['DHVRqe'], attrs: { role: 'presentation' } });
         const yh = createFakeNode('div', { classes: ['YHsVn'] });
-        const row = createFakeNode('div', { classes: ['u987h'], attrs: { role: 'presentation' } });
+        const row = createFakeNode('div', { classes: cls(['u987h']), attrs: { role: 'presentation' } });
         const btn = createFakeNode('button', {
-          classes: ['qqMZif'],
+          classes: cls(['qqMZif']),
           attrs: {
             id: `BAyyLe${threadId}`,
             'data-thread-id': threadId,
@@ -574,15 +580,15 @@ function createFakeAiSearchEnv({
       state.searchInput = null;
       state.clearBtn = null;
 
-      const actionBar = createFakeNode('div', { classes: ['FBq0Sd'] });
+      const actionBar = createFakeNode('div', { classes: cls(['FBq0Sd']) });
       const newThreadBtn = createFakeNode('button', {
-        classes: ['L9tyXb'],
-        attrs: { jsaction: 'click:&KJJZid_b|WIC9ce' },
+        classes: cls(['L9tyXb']),
+        attrs: { jsaction: scrambleObfuscated ? 'click:new_scrambled' : 'click:&KJJZid_b|WIC9ce' },
         textContent: locale === 'en' ? 'New thread' : 'Новая ветка',
       });
       const searchThreadsBtn = createFakeNode('button', {
-        classes: ['L9tyXb'],
-        attrs: { jsaction: 'click:&KJJZid_b|MR4M8b' },
+        classes: cls(['L9tyXb']),
+        attrs: { jsaction: scrambleObfuscated ? 'click:search_scrambled' : 'click:&KJJZid_b|MR4M8b' },
         textContent: locale === 'en' ? 'Search threads' : 'Поиск веток',
       });
       searchThreadsBtn.addEventListener('click', () => enterSearchMode());
@@ -600,9 +606,9 @@ function createFakeAiSearchEnv({
       state.newThreadBtn = null;
       state.searchThreadsBtn = null;
 
-      const searchHeader = createFakeNode('div', { classes: ['uTGOrc'] });
+      const searchHeader = createFakeNode('div', { classes: cls(['uTGOrc']) });
       const exitSearchBtn = createFakeNode('button', {
-        classes: ['Amkkpc'],
+        classes: cls(['Amkkpc']),
         attrs: {
           jsaction: 'click:.CLIENT',
           'aria-label': locale === 'en' ? 'Exit search' : 'Выйти из поиска',
@@ -611,7 +617,7 @@ function createFakeAiSearchEnv({
       exitSearchBtn.addEventListener('click', exitSearchMode);
 
       const searchInput = createFakeNode('input', {
-        classes: ['LudIE'],
+        classes: cls(['LudIE']),
         attrs: {
           type: 'text',
           placeholder: locale === 'en' ? 'Search threads' : 'Поиск веток',
@@ -619,7 +625,7 @@ function createFakeAiSearchEnv({
         },
       });
       const clearBtn = createFakeNode('button', {
-        classes: ['Amkkpc'],
+        classes: cls(['Amkkpc']),
         attrs: {
           'aria-label': locale === 'en' ? 'Clear text' : 'Очистить',
           role: 'button',
@@ -1079,5 +1085,44 @@ describe('search-threads feature (Ctrl+K & keyboard navigation)', () => {
     assert.equal(env.doc.activeElement, env.openSidebarBtn);
 
     feature.destroy();
+  });
+
+  it('works end-to-end when all obfuscated Google class names and tokens are scrambled (en & non-en)', () => {
+    for (const locale of ['en', 'ru']) {
+      const env = createFakeAiSearchEnv({
+        threadCount: 6,
+        rowHeight: 52,
+        viewportHeight: 156,
+        locale,
+        scrambleObfuscated: true,
+      });
+      const feature = createSearchThreadsFeature({ doc: env.doc, observe: false });
+      feature.init();
+
+      const openEv = env.dispatchKey('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, target: env.promptInput });
+      assert.equal(openEv.defaultPrevented, true, `${locale}: Ctrl+K handled`);
+
+      const sidebar = env.getSidebar();
+      assert.ok(sidebar, `${locale}: sidebar opened`);
+      assert.ok(sidebar.searchInput, `${locale}: search mode entered without obfuscated classes/jsaction`);
+      assert.equal(env.doc.activeElement, sidebar.searchInput, `${locale}: search input focused`);
+      assert.equal(sidebar.buttons[0].getAttribute(SEARCH_ACTIVE_ATTR), 'true');
+      assert.equal(sidebar.rows[0].getAttribute(SEARCH_ACTIVE_ROW_ATTR), 'true', `${locale}: visual row marked without .u987h`);
+
+      // Viewport focus recovery without .cIl10d / .XOpo9c
+      env.doc.activeElement = sidebar.viewport;
+      const downEv = env.dispatchKey('keydown', { key: 'ArrowDown', target: sidebar.viewport });
+      assert.equal(downEv.defaultPrevented, true, `${locale}: viewport ArrowDown recovered`);
+      assert.equal(env.doc.activeElement, sidebar.searchInput);
+      assert.equal(sidebar.buttons[1].getAttribute(SEARCH_ACTIVE_ATTR), 'true');
+
+      // Escape exits search and closes Ctrl+K-opened sidebar without .uTGOrc/.Amkkpc/.OxKcRe
+      const escEv = env.dispatchKey('keydown', { key: 'Escape', target: sidebar.searchInput });
+      assert.equal(escEv.defaultPrevented, true, `${locale}: Escape handled`);
+      assert.equal(env.getSidebar(), null, `${locale}: sidebar collapsed without .OxKcRe`);
+      assert.equal(env.doc.activeElement, env.promptInput, `${locale}: prompt refocused`);
+
+      feature.destroy();
+    }
   });
 });

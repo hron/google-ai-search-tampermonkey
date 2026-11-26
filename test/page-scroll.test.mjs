@@ -152,7 +152,8 @@ function matchesSimple(el, token) {
 }
 
 function matchesCompoundDescendant(el, selector) {
-  const parts = selector.trim().split(/\s+/);
+  const parts = selector.trim().match(/(?:\[[^\]]*\]|[^\s\[])+/g) || [];
+  if (parts.length === 0) return false;
   if (!matchesSimple(el, parts[parts.length - 1])) return false;
   let cur = el.parentElement;
   for (let i = parts.length - 2; i >= 0; i -= 1) {

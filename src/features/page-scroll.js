@@ -1,9 +1,9 @@
 import {
-  SIDEBAR_SELECTOR,
   createDocumentScrollerOptions,
   findThreadScroller,
   findUserPromptOffsets,
   isAiModePage,
+  isInsideSidebarElement,
   resolvePromptInputElement,
 } from '../lib/dom.js';
 import {
@@ -33,7 +33,7 @@ function isInsidePageScrollOverlay(el) {
 }
 
 function isInsideSidebar(el) {
-  return Boolean(el && el.closest(SIDEBAR_SELECTOR));
+  return isInsideSidebarElement(el);
 }
 
 function isPageScrollEditableControl(el) {

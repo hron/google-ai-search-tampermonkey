@@ -57,7 +57,7 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
       return null;
     },
     querySelectorAll(sel) {
-      if (sel === '[role="dialog"].jR6h') {
+      if (sel === '[role="dialog"]' || sel === '[role="dialog"].jR6h') {
         return dialogs;
       }
       return [];
@@ -78,24 +78,48 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
     closest: (sel) => (sel.includes('button[data-amic="true"]') ? button : null),
   };
   const chip = { tagName: 'SPAN' };
+  button.parentElement = chip;
   const anchor = {
     tagName: 'A',
     parentElement: chip,
-    matches: (sel) => sel.includes('a.PMDqCb'),
+    textContent: '',
+    matches: (sel) => sel.includes('a.PMDqCb') || sel === 'a',
   };
   chip.querySelector = (sel) => (sel === 'button[data-amic="true"]' ? button : null);
-  anchor.closest = (sel) => (sel.includes('a.PMDqCb') ? anchor : null);
+  anchor.closest = (sel) => (sel === 'a' || sel.includes('a.PMDqCb') ? anchor : null);
 
   const altAnchor = {
     tagName: 'A',
     parentElement: chip,
-    matches: (sel) => sel.includes('a.rA9BFb'),
+    textContent: '',
+    matches: (sel) => sel.includes('a.rA9BFb') || sel === 'a',
   };
-  altAnchor.closest = (sel) => (sel.includes('a.rA9BFb') ? altAnchor : null);
+  altAnchor.closest = (sel) => (sel === 'a' || sel.includes('a.rA9BFb') ? altAnchor : null);
+
+  const renamedClassAnchor = {
+    tagName: 'A',
+    parentElement: chip,
+    textContent: '',
+    matches: (sel) => sel === 'a',
+  };
+  renamedClassAnchor.closest = (sel) => (sel === 'a' ? renamedClassAnchor : null);
+
+  const proseContainer = {
+    tagName: 'P',
+    querySelector: (sel) => (sel === 'button[data-amic="true"]' ? button : null),
+  };
+  const proseLink = {
+    tagName: 'A',
+    parentElement: proseContainer,
+    textContent: 'Wikipedia article',
+    matches: (sel) => sel === 'a',
+  };
+  proseLink.closest = (sel) => (sel === 'a' ? proseLink : null);
 
   const plainLink = {
     tagName: 'A',
-    closest: () => null,
+    textContent: 'Plain link',
+    closest: (sel) => (sel === 'a' ? plainLink : null),
   };
 
   const fire = (target, props = {}, type = 'click') => {
@@ -119,14 +143,48 @@ function createEnv({ search = '?udm=50&q=antigravity', viewportHeight = 900, dia
     for (const l of listeners.filter((x) => x.type === 'resize')) l.fn(ev);
   };
 
-  return { doc, listeners, headChildren, anchor, altAnchor, button, plainLink, fire, fireResize };
+  return {
+    doc,
+    listeners,
+    headChildren,
+    anchor,
+    altAnchor,
+    renamedClassAnchor,
+    proseLink,
+    button,
+    plainLink,
+    fire,
+    fireResize,
+  };
 }
 
-function createFakeDialog({ top, height }) {
+function createFakeDialog({
+  top,
+  height,
+  ariaModal = null,
+  ariaLabel = null,
+  hasExternalLinks = true,
+  hasInputs = false,
+  classes = [],
+}) {
+  const attrs = new Map();
+  if (ariaModal !== null) attrs.set('aria-modal', ariaModal);
+  if (ariaLabel !== null) attrs.set('aria-label', ariaLabel);
+  const classSet = new Set(classes);
   const dialog = {
     style: { top: `${top}px`, left: '500px' },
     _top: top,
     _height: height,
+    classList: {
+      contains: (c) => classSet.has(c),
+    },
+    getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+    setAttribute: (k, v) => attrs.set(k, String(v)),
+    querySelector: (sel) => {
+      if (sel.includes('input') && hasInputs) return { tagName: 'INPUT' };
+      if (sel.includes('a[href') && hasExternalLinks) return { tagName: 'A' };
+      return null;
+    },
     getBoundingClientRect() {
       return { top: dialog._top, bottom: dialog._top + dialog._height, height: dialog._height };
     },
@@ -170,6 +228,14 @@ describe('citation-chips feature (Vimium compatibility & full-height links dialo
     assert.equal(ev2.defaultPrevented, true);
     assert.equal(env.button.clicked, 2);
 
+    const ev3 = env.fire(env.renamedClassAnchor, { isTrusted: false });
+    assert.equal(ev3.defaultPrevented, true, 'must work even when Google renames overlay link classes');
+    assert.equal(env.button.clicked, 3);
+
+    const proseEv = env.fire(env.proseLink, { isTrusted: false });
+    assert.equal(proseEv.defaultPrevented, false, 'must not hijack ordinary prose links sharing a paragraph with a chip');
+    assert.equal(env.button.clicked, 3);
+
     feature.destroy();
   });
 
@@ -202,7 +268,7 @@ describe('citation-chips feature (Vimium compatibility & full-height links dialo
 
     assert.equal(aiEnv.headChildren.length, 1);
     assert.equal(aiEnv.headChildren[0].textContent, CITATION_CHIPS_STYLES);
-    assert.match(CITATION_CHIPS_STYLES, /\[role="dialog"\]\.jR6h/);
+    assert.match(CITATION_CHIPS_STYLES, /\[role="dialog"\]\[data-gaism-related-links-dialog="true"\]/);
     assert.match(CITATION_CHIPS_STYLES, /max-block-size:\s*calc\(100vh - 32px\)\s*!important/);
     aiFeature.destroy();
 
@@ -215,11 +281,18 @@ describe('citation-chips feature (Vimium compatibility & full-height links dialo
 
   it('clamps expanded Related links dialog top position so it stays inside the viewport', () => {
     const dialog = createFakeDialog({ top: 550, height: 490 });
-    const env = createEnv({ viewportHeight: 900, dialogs: [dialog] });
+    const modalDialog = createFakeDialog({ top: 550, height: 490, ariaModal: 'true' });
+    const searchDialog = createFakeDialog({ top: 550, height: 490, hasInputs: true });
+    const env = createEnv({ viewportHeight: 900, dialogs: [dialog, modalDialog, searchDialog] });
     const feature = createCitationChipsFeature({ doc: env.doc, observe: false });
     feature.init();
 
+    assert.equal(dialog.getAttribute('data-gaism-related-links-dialog'), 'true');
     assert.equal(dialog.style.top, '394px');
+    assert.equal(modalDialog.getAttribute('data-gaism-related-links-dialog'), null);
+    assert.equal(modalDialog.style.top, '550px');
+    assert.equal(searchDialog.getAttribute('data-gaism-related-links-dialog'), null);
+    assert.equal(searchDialog.style.top, '550px');
 
     // Also re-clamps on window resize
     dialog._top = 394;

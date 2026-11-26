@@ -256,7 +256,9 @@ function createFakeAiSearchPageEnv({
   const dialog = createFakeElement('div', { attrs: { role: 'dialog', 'aria-modal': 'true' } });
   const dialogButton = createFakeElement('button');
   const sidebar = createFakeElement('div', {
-    attrs: { role: 'navigation', 'data-xid': 'BVEPif', 'aria-label': 'AI Mode history' },
+    attrs: aiModeDom
+      ? { role: 'navigation', 'data-xid': 'BVEPif', 'aria-label': 'AI Mode history' }
+      : { role: 'navigation' },
     classes: ['ho072b', 'j2vKLc'],
   });
   const sidebarScroll = createFakeElement('div', {
@@ -847,7 +849,38 @@ describe('page-scroll feature (Google Search AI Mode)', () => {
       feature.destroy();
     });
 
-    it('ignores the shortcut outside the prompt input, with extra modifiers, without Ctrl+Alt, or on non-AI pages', () => {
+    it('works in any context on an AI Mode page, not only when the prompt input is focused', () => {
+      const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, clientHeight: 800, scrollHeight: 6000 });
+      addPrompts(env);
+      const feature = createPageScrollFeature({ doc: env.doc });
+      feature.init();
+
+      for (const el of [
+        env.body,
+        env.otherTextarea,
+        env.dialogButton,
+        env.sidebarButton,
+        env.scrollableCode,
+      ]) {
+        env.scroller.scrollTop = 1500;
+        env.doc.activeElement = el;
+        const ev = jumpKey(env, 1, { target: el });
+        assert.equal(ev.defaultPrevented, true, `should handle Ctrl+Alt+] on ${el.tagName}`);
+        assert.equal(ev.propagationStopped, true, `should stop propagation on ${el.tagName}`);
+        assert.equal(env.doc.activeElement, el, `should preserve focus on ${el.tagName}`);
+        env.advanceMs(1500);
+        assert.equal(env.scroller.scrollTop, aligned(2400), `should scroll to next prompt from ${el.tagName}`);
+
+        const prevEv = jumpKey(env, -1, { target: el });
+        assert.equal(prevEv.defaultPrevented, true, `should handle Ctrl+Alt+[ on ${el.tagName}`);
+        env.advanceMs(1500);
+        assert.equal(env.scroller.scrollTop, aligned(1200), `should scroll to previous prompt from ${el.tagName}`);
+      }
+
+      feature.destroy();
+    });
+
+    it('ignores the shortcut with extra modifiers, without Ctrl+Alt, during IME composition, or on non-AI pages', () => {
       const env = createFakeAiSearchPageEnv({ initialScrollTop: 1500, scrollHeight: 6000 });
       addPrompts(env);
       const feature = createPageScrollFeature({ doc: env.doc });
@@ -863,14 +896,6 @@ describe('page-scroll feature (Google Search AI Mode)', () => {
         const ev = jumpKey(env, 1, props);
         assert.equal(ev.defaultPrevented, false, JSON.stringify(props));
       }
-
-      env.doc.activeElement = env.body;
-      const outside = jumpKey(env, 1, { target: env.body });
-      assert.equal(outside.defaultPrevented, false);
-
-      env.doc.activeElement = env.otherTextarea;
-      const other = jumpKey(env, 1, { target: env.otherTextarea });
-      assert.equal(other.defaultPrevented, false);
 
       assert.equal(env.frames.size, 0);
       assert.equal(env.scroller.scrollTop, 1500);

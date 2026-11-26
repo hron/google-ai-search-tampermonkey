@@ -167,12 +167,8 @@ function getPromptJumpDirection(event) {
   return 0;
 }
 
-function shouldHandlePromptJump(event, doc, scroller) {
-  if (!isAiModePage(doc) || !scroller) return false;
-  const activeEl = getPageScrollElementNode(doc.activeElement);
-  const targetEl = getPageScrollElementNode(event.target);
-  if (isInsidePageScrollOverlay(activeEl) || isInsidePageScrollOverlay(targetEl)) return false;
-  return Boolean(resolvePromptInputElement(activeEl) || resolvePromptInputElement(targetEl));
+function shouldHandlePromptJump(doc, scroller) {
+  return Boolean(isAiModePage(doc) && scroller);
 }
 
 function consumeEvent(event) {
@@ -199,7 +195,7 @@ export function createPageScrollFeature({ doc = document } = {}) {
 
   function handlePromptJump(event, direction) {
     const scroller = findThreadScroller(doc);
-    if (!shouldHandlePromptJump(event, doc, scroller)) {
+    if (!shouldHandlePromptJump(doc, scroller)) {
       return;
     }
     consumeEvent(event);

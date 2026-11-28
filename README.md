@@ -4,6 +4,11 @@ A modular Tampermonkey userscript that adds missing keyboard navigation and shor
 
 ## Features
 
+### `Ctrl+B` Sidebar Toggle
+Toggle the AI Mode history sidebar from anywhere on the page by clicking the native `Open sidebar` / `Close sidebar` button:
+
+- **`Ctrl+B`** (or **`Cmd+B`**): expands the collapsed sidebar or collapses it when open (works across keyboard layouts and locales; leaves `Ctrl+Shift+B` and regular Google Search untouched).
+
 ### Keyboard-first `Ctrl+K` Thread Search
 Adds a command-palette workflow for Google AI Mode's `"Search threads"` sidebar without stealing focus from the search input:
 
@@ -89,6 +94,7 @@ git push origin main --follow-tags
 - `src/lib/scrolling.js` — Pure spring-based smooth scrolling calculations.
 - `src/features/page-scroll.js` — Smooth `PageUp` / `PageDown` and `ArrowUp` / `ArrowDown` scrolling while the prompt input is focused, plus global `Ctrl+Alt+[` / `Ctrl+Alt+]` (previous / next prompt) navigation.
 - `src/features/search-threads.js` — Keyboard-first `Ctrl+K` thread search & sidebar navigation.
+- `src/features/sidebar-toggle.js` — `Ctrl+B` / `Cmd+B` shortcut that toggles the sidebar via its native open/close buttons.
 - `src/features/citation-chips.js` — Redirects synthetic (Vimium) clicks on citation chip overlay links to the chip button.
 - `src/main.js` — Feature bootstrapper.
 - `scripts/build.mjs` — Zero-dependency bundler generating `dist/google-ai-search-shortcuts.user.js` and `dist/google-ai-search-shortcuts.meta.js`.

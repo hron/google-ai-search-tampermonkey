@@ -1,10 +1,16 @@
 import {
+  OPEN_SIDEBAR_BUTTON_SELECTOR,
+  findCloseSidebarButton,
+  findOpenSidebarButton,
   findPromptInput,
-  findSidebarElement,
+  findSidebarSearchInput,
+  findVisibleSidebarElement,
   focusElement,
   injectStyles,
   isAiModePage,
+  isElementHidden,
   isInsideSidebarElement,
+  isInsideSidebarThreadList,
   toPageOptions,
 } from '../lib/dom.js';
 
@@ -15,12 +21,6 @@ export const SEARCH_ACTIVE_ROW_ATTR = 'data-gaism-search-active-row';
 const SEARCH_OPTION_ID_PREFIX = 'gaism-search-option-';
 const PENDING_OPEN_TIMEOUT_MS = 2500;
 const RESTORE_FOCUS_WINDOW_MS = 800;
-
-const SEARCH_INPUT_SELECTOR =
-  'input[type="search"], input[placeholder*="Search" i]:not([type="hidden"]), input[type="text"]:not([type="hidden"])';
-
-const OPEN_SIDEBAR_BUTTON_SELECTOR =
-  'button[aria-label="Open sidebar"]:not([disabled]), button[jsname="JIu0P"]:not([disabled]), button.ONx74b:not([disabled])';
 
 const SEARCH_THREAD_OPTION_SELECTOR =
   '[data-xid="threads-list-root"] button[data-thread-id]:not([disabled]), [data-xid="aim-threads-view"] button[data-thread-id]:not([disabled]), [role="list"] [role="listitem"] button[data-thread-id]:not([disabled]), [role="listbox"] [role="option"]';
@@ -64,93 +64,15 @@ function resolveSearchElementNode(node) {
     : null;
 }
 
-function isSearchElementHidden(el, stopAt) {
-  let cur = el;
-  while (cur) {
-    if (cur.hidden === true) return true;
-    if (typeof cur.getAttribute === 'function') {
-      if (cur.getAttribute('aria-hidden') === 'true') return true;
-      if (cur.getAttribute('hidden') !== null) return true;
-    }
-    const view = cur.ownerDocument?.defaultView;
-    if (view && typeof view.getComputedStyle === 'function') {
-      try {
-        const style = view.getComputedStyle(cur);
-        if (style && (style.display === 'none' || style.visibility === 'hidden')) {
-          return true;
-        }
-      } catch {
-        // Ignore computed style errors on detached/mocked nodes
-      }
-    }
-    if (cur === stopAt) break;
-    cur = cur.parentElement;
-  }
-  return false;
-}
-
-function findSidebarContainer(doc = document) {
-  const sidebar = findSidebarElement(doc);
-  if (!sidebar || isSearchElementHidden(sidebar, sidebar)) return null;
-  return sidebar;
-}
-
-function findOpenSidebarButton(doc = document) {
-  if (!doc || typeof doc.querySelector !== 'function') return null;
-  return doc.querySelector(OPEN_SIDEBAR_BUTTON_SELECTOR) || null;
-}
-
-function isInsideThreadList(el) {
-  return Boolean(
-    el &&
-      typeof el.closest === 'function' &&
-      el.closest('[data-xid="threads-list-root"], [data-xid="aim-threads-view"], [role="list"]'),
-  );
-}
-
-function findSearchInputInContainer(container) {
-  if (!container || typeof container.querySelector !== 'function') return null;
-  const direct = container.querySelector(SEARCH_INPUT_SELECTOR);
-  if (direct) return direct;
-  if (typeof container.querySelectorAll !== 'function') return null;
-  return (
-    Array.from(container.querySelectorAll('input')).find((el) => {
-      const type = (el.getAttribute?.('type') || 'text').toLowerCase();
-      return type === 'text' || type === 'search';
-    }) || null
-  );
-}
-
-function findCloseSidebarButton(sidebar) {
-  if (!sidebar || typeof sidebar.querySelector !== 'function') return null;
-  const byAria = sidebar.querySelector('button[aria-label="Close sidebar"]:not([disabled])');
-  if (byAria) return byAria;
-
-  // Structural fallback (locale-independent): first enabled icon/aria-labeled
-  // button in the sidebar header outside the thread list and search input bar.
-  if (typeof sidebar.querySelectorAll === 'function') {
-    const searchInput = findSearchInputInContainer(sidebar);
-    const searchBar = searchInput?.parentElement || null;
-    for (const btn of sidebar.querySelectorAll('button[aria-label]:not([disabled])')) {
-      if (btn.getAttribute?.('data-thread-id')) continue;
-      if (isInsideThreadList(btn)) continue;
-      if (searchBar && searchBar.contains?.(btn)) continue;
-      return btn;
-    }
-  }
-
-  return sidebar.querySelector('button.OxKcRe:not([disabled])') || null;
-}
-
 function findSearchThreadsTriggerButton(sidebar) {
   if (!sidebar || typeof sidebar.querySelector !== 'function') return null;
 
   const byAria = sidebar.querySelector('button[aria-label*="Search" i]:not([disabled])');
-  if (byAria && !isInsideThreadList(byAria)) return byAria;
+  if (byAria && !isInsideSidebarThreadList(byAria)) return byAria;
 
   if (typeof sidebar.querySelectorAll === 'function') {
     const headerButtons = Array.from(sidebar.querySelectorAll('button:not([disabled])')).filter(
-      (btn) => !btn.getAttribute?.('data-thread-id') && !isInsideThreadList(btn),
+      (btn) => !btn.getAttribute?.('data-thread-id') && !isInsideSidebarThreadList(btn),
     );
     const byText = headerButtons.find((btn) => /search/i.test(btn.textContent || ''));
     if (byText) return byText;
@@ -179,7 +101,7 @@ function findExitSearchButton(container) {
 
   // Structural fallback (locale-independent): the Exit search button sits
   // inside the same search bar container directly before the search <input>.
-  const input = findSearchInputInContainer(container);
+  const input = findSidebarSearchInput(container);
   const searchBar = input?.parentElement || null;
   if (searchBar && typeof searchBar.querySelectorAll === 'function') {
     const buttons = Array.from(searchBar.querySelectorAll('button:not([disabled])'));
@@ -194,10 +116,10 @@ function findExitSearchButton(container) {
 export function findSearchThreadsUI(doc = document) {
   if (!doc || typeof doc.querySelector !== 'function') return null;
 
-  const sidebar = findSidebarContainer(doc);
+  const sidebar = findVisibleSidebarElement(doc);
   if (sidebar) {
-    const input = findSearchInputInContainer(sidebar);
-    if (input && !isSearchElementHidden(input, sidebar)) {
+    const input = findSidebarSearchInput(sidebar);
+    if (input && !isElementHidden(input, sidebar)) {
       return { container: sidebar, input, isSidebar: true };
     }
   }
@@ -207,11 +129,11 @@ export function findSearchThreadsUI(doc = document) {
     const dialogs = Array.from(doc.querySelectorAll('[role="dialog"]'));
     for (let i = dialogs.length - 1; i >= 0; i -= 1) {
       const dialog = dialogs[i];
-      if (isSearchElementHidden(dialog, dialog)) continue;
+      if (isElementHidden(dialog, dialog)) continue;
       const input =
         dialog.querySelector('[role="search"] input:not([type="hidden"])') ||
         dialog.querySelector('input[type="search"]');
-      if (input && !isSearchElementHidden(input, dialog)) {
+      if (input && !isElementHidden(input, dialog)) {
         return { container: dialog, input, isSidebar: false };
       }
     }
@@ -232,7 +154,7 @@ export function findSearchThreadOptions(container, input = null) {
     if (el.disabled === true || (typeof el.getAttribute === 'function' && el.getAttribute('disabled') !== null)) {
       continue;
     }
-    if (isSearchElementHidden(el, container)) continue;
+    if (isElementHidden(el, container)) continue;
     if (input && el === input) continue;
 
     seen.add(el);
@@ -628,7 +550,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
       return;
     }
 
-    const sidebar = findSidebarContainer(doc);
+    const sidebar = findVisibleSidebarElement(doc);
     if (!sidebar) return;
 
     const trigger = findSearchThreadsTriggerButton(sidebar);
@@ -649,7 +571,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
     const shouldCollapseSidebar = openedSidebarViaShortcut;
     openedSidebarViaShortcut = false;
 
-    const sidebar = findSidebarContainer(doc);
+    const sidebar = findVisibleSidebarElement(doc);
     const container = activeContainer || sidebar;
     const exitBtn = findExitSearchButton(container);
     if (exitBtn && typeof exitBtn.click === 'function') {
@@ -657,7 +579,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
     }
 
     if (shouldCollapseSidebar) {
-      const currentSidebar = findSidebarContainer(doc);
+      const currentSidebar = findVisibleSidebarElement(doc);
       const closeBtn = findCloseSidebarButton(currentSidebar);
       if (closeBtn && typeof closeBtn.click === 'function') {
         closeBtn.click();
@@ -690,7 +612,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
       return;
     }
 
-    const sidebar = findSidebarContainer(doc);
+    const sidebar = findVisibleSidebarElement(doc);
     if (sidebar) {
       openedSidebarViaShortcut = false;
       armPendingOpenSearch();
@@ -726,7 +648,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
       if (activeContainer || activeInput || activeOption) {
         detachContainerListeners();
       }
-      if (!pendingOpenSearch && !findSidebarContainer(doc)) {
+      if (!pendingOpenSearch && !findVisibleSidebarElement(doc)) {
         openedSidebarViaShortcut = false;
       }
       return null;
@@ -886,7 +808,7 @@ export function createSearchThreadsFeature({ doc = document, observe = true } = 
 
       if (shouldCollapse) {
         setTimeout(() => {
-          const closeBtn = findCloseSidebarButton(findSidebarContainer(doc));
+          const closeBtn = findCloseSidebarButton(findVisibleSidebarElement(doc));
           if (closeBtn && typeof closeBtn.click === 'function') {
             closeBtn.click();
             armRestorePromptFocus();

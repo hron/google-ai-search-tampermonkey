@@ -482,6 +482,20 @@ async function verifyAiModeScenario(context, url, label) {
   assert.equal(afterEscPinned.sidebarOpen, true, `${label}: manually opened sidebar stays open after Escape`);
   assert.equal(afterEscPinned.promptFocused, true, `${label}: focus returns to prompt after Escape`);
 
+  // --- Ctrl+B Sidebar Toggle E2E ---
+  await pressCtrl('b', 250);
+  const afterCtrlBClose = await getSearchState();
+  assert.equal(afterCtrlBClose.sidebarOpen, false, `${label}: Ctrl+B closes expanded sidebar`);
+
+  await pressCtrl('b', 250);
+  const afterCtrlBOpen = await getSearchState();
+  assert.equal(afterCtrlBOpen.sidebarOpen, true, `${label}: Ctrl+B opens collapsed sidebar`);
+  assert.equal(afterCtrlBOpen.searchOpen, false, `${label}: Ctrl+B opens sidebar in default mode`);
+
+  await pressCtrl('b', 250);
+  const afterCtrlBCloseAgain = await getSearchState();
+  assert.equal(afterCtrlBCloseAgain.sidebarOpen, false, `${label}: Ctrl+B closes sidebar again`);
+
   console.log(`PASS: ${label}`);
 }
 
@@ -499,10 +513,13 @@ async function verifyRegularSearchUntouched(context, url, label) {
       ta.dispatchEvent(arrowEv);
       const kEv = new KeyboardEvent('keydown', { key: 'k', code: 'KeyK', ctrlKey: true, cancelable: true, bubbles: true });
       ta.dispatchEvent(kEv);
+      const bEv = new KeyboardEvent('keydown', { key: 'b', code: 'KeyB', ctrlKey: true, cancelable: true, bubbles: true });
+      ta.dispatchEvent(bEv);
       return {
         pageDownPrevented: pgEv.defaultPrevented,
         arrowDownPrevented: arrowEv.defaultPrevented,
         ctrlKPrevented: kEv.defaultPrevented,
+        ctrlBPrevented: bEv.defaultPrevented,
       };
     })())`,
     target: { context },
@@ -512,6 +529,7 @@ async function verifyRegularSearchUntouched(context, url, label) {
   assert.equal(state.pageDownPrevented, false, `${label}: PageDown must not be hijacked on regular search`);
   assert.equal(state.arrowDownPrevented, false, `${label}: ArrowDown must not be hijacked on regular search`);
   assert.equal(state.ctrlKPrevented, false, `${label}: Ctrl+K must not be hijacked on regular search`);
+  assert.equal(state.ctrlBPrevented, false, `${label}: Ctrl+B must not be hijacked on regular search`);
   console.log(`PASS: ${label}`);
 }
 

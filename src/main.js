@@ -1,11 +1,13 @@
 import { createCitationChipsFeature } from './features/citation-chips.js';
 import { createPageScrollFeature } from './features/page-scroll.js';
 import { createSearchThreadsFeature } from './features/search-threads.js';
+import { createSidebarToggleFeature } from './features/sidebar-toggle.js';
 
 export function bootstrapGoogleAiSearchShortcuts(doc = document) {
   const features = [
     createPageScrollFeature({ doc }),
     createSearchThreadsFeature({ doc, observe: true }),
+    createSidebarToggleFeature({ doc }),
     createCitationChipsFeature({ doc }),
   ];
 

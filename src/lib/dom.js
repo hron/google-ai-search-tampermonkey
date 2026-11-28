@@ -7,11 +7,45 @@ export const PROMPT_INPUT_SELECTOR =
 export const SIDEBAR_SELECTOR =
   '[role="navigation"][aria-label="AI Mode history"], nav[aria-label="AI Mode history"], [role="navigation"][data-xid="BVEPif"]';
 
+export const OPEN_SIDEBAR_BUTTON_SELECTOR =
+  'button[aria-label="Open sidebar"]:not([disabled]), button[jsname="JIu0P"]:not([disabled]), button.ONx74b:not([disabled])';
+
 const SIDEBAR_CONTENT_MARKER_SELECTOR =
   '[data-xid="threads-list-root"], [data-xid="aim-threads-view"]';
 
+const SIDEBAR_THREAD_LIST_SELECTOR =
+  '[data-xid="threads-list-root"], [data-xid="aim-threads-view"], [role="list"]';
+
+const SIDEBAR_SEARCH_INPUT_SELECTOR =
+  'input[type="search"], input[placeholder*="Search" i]:not([type="hidden"]), input[type="text"]:not([type="hidden"])';
+
 // User prompt bubbles inside the AI Mode conversation thread
 export const USER_PROMPT_SELECTOR = '.ilZyRc.R7mRQb, .Ax52xb';
+
+export function isElementHidden(el, stopAt) {
+  let cur = el;
+  while (cur) {
+    if (cur.hidden === true) return true;
+    if (typeof cur.getAttribute === 'function') {
+      if (cur.getAttribute('aria-hidden') === 'true') return true;
+      if (cur.getAttribute('hidden') !== null) return true;
+    }
+    const view = cur.ownerDocument?.defaultView;
+    if (view && typeof view.getComputedStyle === 'function') {
+      try {
+        const style = view.getComputedStyle(cur);
+        if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+          return true;
+        }
+      } catch {
+        // Ignore computed style errors on detached/mocked nodes
+      }
+    }
+    if (cur === stopAt) break;
+    cur = cur.parentElement;
+  }
+  return false;
+}
 
 export function isSidebarElement(el) {
   if (!el) return false;
@@ -36,11 +70,69 @@ export function findSidebarElement(doc = document) {
   return null;
 }
 
+export function findVisibleSidebarElement(doc = document) {
+  const sidebar = findSidebarElement(doc);
+  if (!sidebar || isElementHidden(sidebar, sidebar)) return null;
+  return sidebar;
+}
+
 export function isInsideSidebarElement(el) {
   if (!el || typeof el.closest !== 'function') return false;
   if (el.closest(SIDEBAR_SELECTOR)) return true;
   const nav = el.closest('[role="navigation"], nav');
   return Boolean(nav && isSidebarElement(nav));
+}
+
+export function isInsideSidebarThreadList(el) {
+  return Boolean(el && typeof el.closest === 'function' && el.closest(SIDEBAR_THREAD_LIST_SELECTOR));
+}
+
+export function findSidebarSearchInput(container) {
+  if (!container || typeof container.querySelector !== 'function') return null;
+  const direct = container.querySelector(SIDEBAR_SEARCH_INPUT_SELECTOR);
+  if (direct) return direct;
+  if (typeof container.querySelectorAll !== 'function') return null;
+  return (
+    Array.from(container.querySelectorAll('input')).find((el) => {
+      const type = (el.getAttribute?.('type') || 'text').toLowerCase();
+      return type === 'text' || type === 'search';
+    }) || null
+  );
+}
+
+export function findOpenSidebarButton(doc = document) {
+  if (!doc || typeof doc.querySelector !== 'function') return null;
+  if (typeof doc.querySelectorAll === 'function') {
+    for (const btn of doc.querySelectorAll(OPEN_SIDEBAR_BUTTON_SELECTOR)) {
+      if (!isElementHidden(btn)) return btn;
+    }
+    return null;
+  }
+  const btn = doc.querySelector(OPEN_SIDEBAR_BUTTON_SELECTOR);
+  return btn && !isElementHidden(btn) ? btn : null;
+}
+
+export function findCloseSidebarButton(sidebar) {
+  if (!sidebar || typeof sidebar.querySelector !== 'function') return null;
+  const byAria = sidebar.querySelector('button[aria-label="Close sidebar"]:not([disabled])');
+  if (byAria && !isElementHidden(byAria, sidebar)) return byAria;
+
+  // Structural fallback (locale-independent): first enabled icon/aria-labeled
+  // button in the sidebar header outside the thread list and search input bar.
+  if (typeof sidebar.querySelectorAll === 'function') {
+    const searchInput = findSidebarSearchInput(sidebar);
+    const searchBar = searchInput?.parentElement || null;
+    for (const btn of sidebar.querySelectorAll('button[aria-label]:not([disabled])')) {
+      if (isElementHidden(btn, sidebar)) continue;
+      if (btn.getAttribute?.('data-thread-id')) continue;
+      if (isInsideSidebarThreadList(btn)) continue;
+      if (searchBar && searchBar.contains?.(btn)) continue;
+      return btn;
+    }
+  }
+
+  const byClass = sidebar.querySelector('button.OxKcRe:not([disabled])');
+  return byClass && !isElementHidden(byClass, sidebar) ? byClass : null;
 }
 
 export function toPageOptions(obj, doc = document) {
